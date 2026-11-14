@@ -1,0 +1,94 @@
+openapi: 3.0.3
+info:
+  title: MineCManager Control Plane
+  version: 0.1.0
+  description: Experimental loopback-only API. Do not expose directly to the internet.
+servers:
+  - url: http://127.0.0.1:9080
+security:
+  - bearerAuth: []
+paths:
+  /v1/nodes:
+    get:
+      summary: List registered nodes
+      operationId: listNodes
+      x-required-scope: nodes:read
+      responses:
+        '200':
+          description: Node identifiers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id]
+                  properties:
+                    id:
+                      type: string
+        '403':
+          description: Missing or insufficient API key
+  /v1/nodes/{nodeId}/status:
+    get:
+      summary: Get Minecraft service state
+      operationId: getNodeStatus
+      x-required-scope: nodes:read
+      parameters:
+        - $ref: '#/components/parameters/nodeId'
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  state:
+                    type: string
+        '403':
+          description: Missing or insufficient API key
+        '404':
+          description: Node not found
+        '502':
+          description: Agent unavailable
+  /v1/nodes/{nodeId}/actions:
+    post:
+      summary: Control Minecraft service
+      operationId: controlNode
+      x-required-scope: nodes:control
+      parameters:
+        - $ref: '#/components/parameters/nodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, restart]
+      responses:
+        '204':
+          description: Action completed
+        '400':
+          description: Invalid action
+        '403':
+          description: Missing or insufficient API key
+        '404':
+          description: Node not found
+        '502':
+          description: Agent unavailable
+components:
+  parameters:
+    nodeId:
+      name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
