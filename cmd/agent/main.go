@@ -72,6 +72,7 @@ func main(){
  mux.HandleFunc("/v1/files",a.auth(a.files))
  mux.HandleFunc("/v1/plugins",a.auth(a.plugins))
  mux.HandleFunc("/v1/plugins/",a.auth(a.plugin))
+ mux.HandleFunc("/v1/backup/manifest",a.auth(a.backupManifest))
  s:=&http.Server{Addr:"127.0.0.1:9081",Handler:mux,ReadHeaderTimeout:5*time.Second}
  log.Fatal(s.ListenAndServe())
 }
