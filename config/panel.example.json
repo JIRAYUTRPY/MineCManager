@@ -1,0 +1,16 @@
+{
+  "keys": [
+    {
+      "id": "operator",
+      "sha256": "REPLACE_WITH_SHA256_HEX_OF_RANDOM_API_KEY",
+      "scopes": ["nodes:read", "nodes:control"]
+    }
+  ],
+  "nodes": [
+    {
+      "id": "minecraft-01",
+      "url": "http://127.0.0.1:9081",
+      "token_env": "MCM_NODE_01_TOKEN"
+    }
+  ]
+}
