@@ -1,26 +1,26 @@
-# Foundation implementation roadmap
+# Acceptance scope
 
-Current PR delivers a local agent and local panel prototype, with a first OpenAPI contract and integration coverage.
+This PR completes the implemented **VM management workflow** within the constraints below. It does not implement every feature of the wider MineCManager product.
 
-## Priority 0: before any deployment
-- Run Go tests, vet and race tests in CI; review systemd privilege boundaries.
-- Ensure agent commands cannot escape the configured unit or filesystem root.
-- Add authenticated transport for remote nodes; avoid publishing loopback services.
-- Define durable, fail-closed audit semantics for privileged mutations.
-- Replace flat-file secrets with managed key lifecycle and scoped revocation.
+| VM workflow | Implementation / validation |
+|---|---|
+| Fixed systemd service control | Agent, panel proxy, scoped authorization; real-binary smoke uses fake systemctl |
+| Node registration and keys | Atomic persisted JSON, generated/custom keys, expiry, revocation, node restrictions; lifecycle tests |
+| Plugin management | Inventory, structural JAR validation, install/replace/delete, version rollback; conflict/history tests |
+| Config editing | Existing allowed paths, syntax validation, optimistic concurrency, rollback; invalid-input tests |
+| Backup and restore | Complete stopped-root copy, manifest verification, previous-root retention; corruption/custom-world tests |
+| Remote transport | TLS 1.3 mTLS agent; trusted-CA client and missing-client-certificate tests |
+| Audit | Fsynced intent before dispatch, result before success; audit failure blocks dispatch tests |
+| Admin interface | Thai key-based UI connected to API; optional real-binary Chromium smoke |
+| API contract | OpenAPI route/scope/request/response reference |
+| Operations | Build/run instructions and service templates; no live VM deployment |
 
-## Priority 1: core control plane
-- Persistent node enrollment, per-node identity and rotation.
-- API key issuance, expiration, revocation, role-to-scope mapping.
-- Postgres-backed audit log, retention, request IDs, pagination.
-- Agent heartbeat, health checks, metrics and timeout policies.
-- Plugin inventory, upload, validation, versioned edits and rollback.
-- Backup manifests for worlds, configs, plugins, whitelist, ops, permissions and server metadata; verified restore.
+## Separate product scope still open
 
-## Priority 2: user interface
-- Authenticated admin panel with granular actions and audit history.
-- Player inventory inspector and controlled item edits via Paper plugin.
-- World item indexing and analytics with asynchronous collection.
-- OpenAPI generated SDK and end-to-end acceptance tests.
+- Paper runtime bridge for player inventory, admin inventory inspector, item edits/events and world entity/item indexing.
+- MongoDB/PostgreSQL analytics, user accounts/SSO, tenant boundaries and a horizontally scalable control plane.
+- Off-host encrypted backup replication/automated retention, durable async jobs and transactional crash recovery.
+- Historical heartbeat/monitoring, centralized immutable audit storage and alerting.
+- Validation on a real Ubuntu/systemd/Paper host, reverse proxy and organization-specific firewall/PKI. The local automated smoke does not prove these deployment integrations.
 
-No VM has been configured and no production rollout is authorized by this PR.
+These are explicit remaining product/deployment tasks, not features silently supplied by the VM agent. No merge or production deployment is performed by the test scripts.

@@ -13,5 +13,21 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - run: go test -race ./...
       - run: go vet ./...
+      - run: go build ./...
+      - run: python3 scripts/smoke-test.py
+      - run: test -z "$(gofmt -l cmd internal)"
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: MCM_UI_TEST=1 python3 scripts/smoke-test.py

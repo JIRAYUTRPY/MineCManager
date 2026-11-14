@@ -1,0 +1,19 @@
+[Unit]
+Description=MineCManager Panel
+After=network-online.target
+[Service]
+User=mcm-panel
+Group=mcm-panel
+EnvironmentFile=/etc/mcm/panel.env
+ExecStart=/usr/local/bin/mcm-panel
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mcm-panel
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+[Install]
+WantedBy=multi-user.target

@@ -1,9 +1,22 @@
 {
   "keys": [
     {
-      "id": "operator",
+      "id": "bootstrap-admin",
       "sha256": "REPLACE_WITH_SHA256_HEX_OF_RANDOM_API_KEY",
-      "scopes": ["nodes:read", "nodes:control"]
+      "scopes": [
+        "nodes:read",
+        "nodes:control",
+        "plugins:read",
+        "plugins:write",
+        "configs:read",
+        "configs:write",
+        "backups:read",
+        "backups:write",
+        "backups:restore",
+        "admin:keys",
+        "admin:nodes",
+        "audit:read"
+      ]
     }
   ],
   "nodes": [

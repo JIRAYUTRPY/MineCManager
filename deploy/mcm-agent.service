@@ -1,0 +1,19 @@
+[Unit]
+Description=MineCManager VM Agent
+After=network-online.target
+[Service]
+User=mcm-agent
+Group=minecraft
+EnvironmentFile=/etc/mcm/agent.env
+ExecStart=/usr/local/bin/mcm-agent
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/minecraft-host /var/lib/mcm-agent
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+[Install]
+WantedBy=multi-user.target
