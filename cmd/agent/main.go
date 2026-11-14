@@ -70,6 +70,8 @@ func main(){
  mux.HandleFunc("/v1/status",a.auth(a.status))
  mux.HandleFunc("/v1/actions",a.auth(a.execute))
  mux.HandleFunc("/v1/files",a.auth(a.files))
+ mux.HandleFunc("/v1/plugins",a.auth(a.plugins))
+ mux.HandleFunc("/v1/plugins/",a.auth(a.plugin))
  s:=&http.Server{Addr:"127.0.0.1:9081",Handler:mux,ReadHeaderTimeout:5*time.Second}
  log.Fatal(s.ListenAndServe())
 }
