@@ -22,6 +22,7 @@ The smoke test starts both binaries with an isolated fake systemctl; it does not
 - [Backup and restore](docs/backup.md)
 - [Architecture and boundaries](docs/architecture.md)
 - [Acceptance scope and remaining product work](docs/next-steps.md)
+- [Paper runtime bridge](docs/paper-bridge.md)
 - [OpenAPI](api/openapi.yaml)
 
-This repository manages VM server files and service lifecycle. A Paper runtime bridge for player inventory/item changes and world resource indexing is a separate, unimplemented product layer. No production host is configured by building or testing this repository.
+This repository manages VM server files and service lifecycle. An optional Paper bridge adds online player inventory inspection, controlled item replacement and bounded live resource aggregates; full persistent world indexing remains separate. No production host is configured by building or testing this repository.

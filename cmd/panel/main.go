@@ -57,7 +57,7 @@ type auditEvent struct {
 }
 
 var validID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-var scopes = map[string]bool{"nodes:read": true, "nodes:control": true, "plugins:read": true, "plugins:write": true, "configs:read": true, "configs:write": true, "backups:read": true, "backups:write": true, "backups:restore": true, "admin:keys": true, "admin:nodes": true, "audit:read": true}
+var scopes = map[string]bool{"nodes:read": true, "nodes:control": true, "plugins:read": true, "plugins:write": true, "configs:read": true, "configs:write": true, "backups:read": true, "backups:write": true, "backups:restore": true, "admin:keys": true, "admin:nodes": true, "audit:read": true, "players:read": true, "inventory:read": true, "inventory:write": true, "resources:read": true}
 
 func validate(c config) error {
 	if len(c.Keys) == 0 {
@@ -236,6 +236,15 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 	scope := ""
 	limit := int64(1 << 20)
 	switch {
+	case endpoint == "paper/players" && r.Method == "GET":
+		scope = "players:read"
+	case endpoint == "paper/resources" && r.Method == "GET":
+		scope = "resources:read"
+	case len(parts) == 7 && parts[3] == "paper" && parts[4] == "players" && parts[6] == "inventory" && r.Method == "GET":
+		scope = "inventory:read"
+	case len(parts) == 8 && parts[3] == "paper" && parts[4] == "players" && parts[6] == "inventory" && r.Method == "PUT":
+		scope = "inventory:write"
+		limit = 16384
 	case endpoint == "status" && r.Method == "GET":
 		scope = "nodes:read"
 	case endpoint == "metrics" && r.Method == "GET":

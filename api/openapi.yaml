@@ -987,6 +987,226 @@ paths:
           type: integer
           minimum: 1
           maximum: 1000
+  /v1/nodes/{nodeId}/paper/players:
+    get:
+      summary: List online Paper player UUIDs and names
+      operationId: get__v1_nodes_nodeId_paper_players
+      x-required-scope: players:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    uuid: *id001
+                    name: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/paper/players/{playerUUID}/inventory:
+    get:
+      summary: Inspect online player inventory slots and comparison hashes
+      operationId: get__v1_nodes_nodeId_paper_players_playerUUID_inventory
+      x-required-scope: inventory:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid: *id001
+                  name: *id001
+                  observed_at: *id001
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slot:
+                          type: integer
+                        material: *id001
+                        amount:
+                          type: integer
+                        display_name: *id001
+                        sha256: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: playerUUID
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/paper/players/{playerUUID}/inventory/{slot}:
+    put:
+      summary: Replace an online player slot (0..40); amount zero clears it
+      operationId: put__v1_nodes_nodeId_paper_players_playerUUID_inventory_slot
+      x-required-scope: inventory:write
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: playerUUID
+        in: path
+        required: true
+        schema: *id001
+      - name: slot
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Quoted current slot SHA-256, read from inventory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                material: *id001
+                amount:
+                  type: integer
+                  minimum: 0
+                  maximum: 64
+                display_name:
+                  type: string
+                  maxLength: 128
+                lore:
+                  type: array
+                  maxItems: 16
+                  items:
+                    type: string
+                    maxLength: 256
+              required:
+              - material
+              - amount
+  /v1/nodes/{nodeId}/paper/resources:
+    get:
+      summary: Bounded loaded ground item and online inventory aggregates; excludes
+        offline/unloaded/container data
+      operationId: get__v1_nodes_nodeId_paper_resources
+      x-required-scope: resources:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  observed_at: *id001
+                  scope: *id001
+                  truncated:
+                    type: boolean
+                  ground:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  players:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
 components:
   securitySchemes:
     bearerAuth:

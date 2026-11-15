@@ -12,12 +12,13 @@ This PR completes the implemented **VM management workflow** within the constrai
 | Remote transport | TLS 1.3 mTLS agent; trusted-CA client and missing-client-certificate tests |
 | Audit | Fsynced intent before dispatch, result before success; audit failure blocks dispatch tests |
 | Admin interface | Thai key-based UI connected to API; optional real-binary Chromium smoke |
+| Paper integration | Optional online player inventory/item API and bounded resource aggregates; Java validation tests and scoped Go proxy tests |
 | API contract | OpenAPI route/scope/request/response reference |
 | Operations | Build/run instructions and service templates; no live VM deployment |
 
 ## Separate product scope still open
 
-- Paper runtime bridge for player inventory, admin inventory inspector, item edits/events and world entity/item indexing.
+- Offline player inventory, player self-service identity binding, full persistent world/container indexing and event automation.
 - MongoDB/PostgreSQL analytics, user accounts/SSO, tenant boundaries and a horizontally scalable control plane.
 - Off-host encrypted backup replication/automated retention, durable async jobs and transactional crash recovery.
 - Historical heartbeat/monitoring, centralized immutable audit storage and alerting.

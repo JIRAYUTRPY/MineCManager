@@ -15,7 +15,11 @@
         "backups:restore",
         "admin:keys",
         "admin:nodes",
-        "audit:read"
+        "audit:read",
+        "players:read",
+        "inventory:read",
+        "inventory:write",
+        "resources:read"
       ]
     }
   ],

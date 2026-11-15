@@ -153,3 +153,16 @@ func TestPersistenceFailureDoesNotIssueKey(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }
+func TestInventoryWriteRequiresSeparateScope(t *testing.T) {
+	s, calls := managementPanel(t, nil)
+	path := "/v1/nodes/one/paper/players/00000000-0000-0000-0000-000000000001/inventory/0"
+	w := panelRequest(s, "PUT", path, adminToken, `{"material":"STONE","amount":1}`)
+	if w.Code != 403 || calls.Load() != 0 {
+		t.Fatal("node control key allowed item write")
+	}
+	s.cfg.Keys[0].Scopes = append(s.cfg.Keys[0].Scopes, "inventory:write")
+	w = panelRequest(s, "PUT", path, adminToken, `{"material":"STONE","amount":1}`)
+	if w.Code != 204 || calls.Load() != 1 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}

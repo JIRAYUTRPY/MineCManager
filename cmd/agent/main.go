@@ -17,10 +17,11 @@ import (
 )
 
 type agent struct {
-	token   string
-	root    string
-	service string
-	command func(context.Context, string) ([]byte, error)
+	token     string
+	root      string
+	service   string
+	command   func(context.Context, string) ([]byte, error)
+	paperHTTP *http.Client
 }
 
 func (a agent) auth(next http.HandlerFunc) http.HandlerFunc {
@@ -167,6 +168,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/status", a.auth(a.status))
 	mux.HandleFunc("/v1/metrics", a.auth(a.metrics))
+	mux.HandleFunc("/v1/paper/", a.auth(a.paper))
 	mux.HandleFunc("/v1/actions", a.auth(a.execute))
 	mux.HandleFunc("/v1/files", a.auth(a.files))
 	mux.HandleFunc("/v1/plugins", a.auth(a.plugins))

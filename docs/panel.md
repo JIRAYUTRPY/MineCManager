@@ -13,6 +13,7 @@ Open `http://127.0.0.1:9080/` through an authenticated private connection or HTT
 | plugins:read / plugins:write | Inventory/history / install, replace, restore, delete |
 | configs:read / configs:write | Config content/history / edit and rollback |
 | backups:read / backups:write / backups:restore | Discovery/list / create / verified restore |
+| players:read / inventory:read / inventory:write / resources:read | Paper online players / inventory inspection / guarded slot replacement / live aggregates |
 | admin:keys | List key metadata, issue, revoke |
 | admin:nodes | Register and remove nodes |
 | audit:read | Paginated local audit log |
