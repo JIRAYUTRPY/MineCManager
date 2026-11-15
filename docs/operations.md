@@ -1,5 +1,7 @@
 # Build, provision and recover
 
+For copyable step-by-step setup, use the [Thai installation guide](install-th.md).
+
 These instructions/templates are for review and later deployment. They have not been run against a real host. Use Linux/systemd, Go 1.25+ to build, and a Minecraft Java runtime appropriate to your selected server version. No Java/Paper version is selected or downloaded by this agent.
 
 ## Filesystem and OS identities

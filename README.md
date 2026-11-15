@@ -2,6 +2,10 @@
 
 Go control plane and VM agent for managing a systemd-hosted Minecraft server. The panel includes a Thai admin UI, scoped API keys, node registration, plugin/config versioning, stopped-server backups and verified restore.
 
+## Installation
+
+[คู่มือติดตั้งภาษาไทย — Ubuntu, systemd, Nginx/HTTPS และ mTLS](docs/install-th.md)
+
 ## Build and verify
 
 Linux, Go 1.25+, Python 3 (smoke test only):
