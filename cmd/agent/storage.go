@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -143,4 +144,23 @@ func readBounded(root *os.Root, path string, limit int64) ([]byte, error) {
 		return nil, errors.New("file too large")
 	}
 	return b, err
+}
+
+// Unpredictable names prevent abandoned staging files from blocking a retry.
+func createStaging(root *os.Root, dir string, mode os.FileMode) (*os.File, string, error) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return nil, "", err
+	}
+	name := filepath.Join(dir, ".mcm-"+hex.EncodeToString(id[:])+".tmp")
+	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return nil, "", err
+	}
+	if err = f.Chmod(mode); err != nil {
+		f.Close()
+		root.Remove(name)
+		return nil, "", err
+	}
+	return f, name, nil
 }

@@ -175,3 +175,19 @@ func TestSnapshotGroupWritePermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestRetryAfterAbandonedStagingFile(t *testing.T) {
+	a := testAgent(t)
+	newConfig := []byte("motd=updated\n")
+	old := []byte("motd=old\n")
+	os.WriteFile(filepath.Join(a.root, "server.properties"), old, 0660)
+	os.WriteFile(filepath.Join(a.root, ".mcm-"+sum(newConfig)+".tmp"), []byte("abandoned"), 0600)
+	r := httptest.NewRequest("PUT", "/v1/config?path=server.properties", bytes.NewReader(newConfig))
+	r.Header.Set("If-Match", `"`+sum(old)+`"`)
+	request(t, func(w *httptest.ResponseRecorder) { a.configFile(w, r) }, 200)
+	jar := jarBytes(t, "retry")
+	os.WriteFile(filepath.Join(a.root, "plugins", ".mcm-"+sum(jar)+".tmp"), []byte("abandoned"), 0600)
+	r = httptest.NewRequest("PUT", "/v1/plugins/Retry.jar", bytes.NewReader(jar))
+	r.Header.Set("Content-Type", "application/java-archive")
+	request(t, func(w *httptest.ResponseRecorder) { a.plugin(w, r) }, 201)
+}

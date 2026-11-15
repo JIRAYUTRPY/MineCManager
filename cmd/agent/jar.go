@@ -164,8 +164,7 @@ func (a agent) mutatePlugin(w http.ResponseWriter, r *http.Request, name string)
 		}
 	} else {
 		// Stage and publish with an atomic no-overwrite hard link inside the opened root.
-		tmp := "plugins/.mcm-" + sum(b) + ".tmp"
-		f, e := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0640)
+		f, tmp, e := createStaging(root, "plugins", 0640)
 		err = e
 		if e == nil {
 			defer root.Remove(tmp)

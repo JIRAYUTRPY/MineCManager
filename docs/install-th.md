@@ -459,7 +459,7 @@ Restore ต้องมีพื้นที่ staging และจะเก็
 | `another daemon owns ...` | มี process อีกตัวใช้ state/config เดียวกัน; ตรวจ process และหยุดตัวซ้ำ ไม่ลบ lock เพื่อบังคับรันสองตัว |
 | Panel 403 | key ผิด/หมดอายุ/revoked, scope หรือ node restriction ไม่ตรง อย่าสับสนกับ agent token |
 | Panel 502 | Agent/Paper ไม่ขึ้น, token ไม่ตรง, URL/certificate/firewall ผิด; mutation อาจมีผลแล้ว ให้ตรวจ state ก่อน retry |
-| `audit unavailable` / 503 | ownership/พื้นที่ดิสก์/สิทธิ์ `/var/lib/mcm-panel`; ระบบไม่ dispatch หากเขียน intent ไม่ได้ |
+| `audit unavailable` / 503 | ตรวจ ownership/พื้นที่ดิสก์/สิทธิ์ แล้วหยุด Panel และเก็บสำเนา log ก่อนตรวจรายการค้าง หลังแก้ต้อง restart; ระบบจะไม่กลับมาส่งคำสั่งเองและไม่ยอมเริ่มหาก log มี record เสีย/ไม่ครบ ดูวิธีกู้คืนใน [Panel audit recovery](panel.md#audit-failure-recovery) |
 | service action 502 | ดู Agent log; ตรวจ Polkit user/unit/verb และ `systemctl status minecraft` |
 | edit/backup 409 | ต้อง `inactive`; service `failed` หรือ `unknown` ไม่ถือว่ายืนยันว่าหยุด ตรวจสาเหตุก่อนทำต่อ |
 | config/plugin/item 412 | อ่านข้อมูล/hash ใหม่แล้วส่ง quoted `If-Match` ที่ตรงกับปัจจุบัน |

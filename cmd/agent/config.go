@@ -62,7 +62,14 @@ func (a agent) saveVersion(path string, b []byte) error {
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	return atomicWrite(filepath.Join(dir, sum(b)), b)
+	if err = atomicWrite(filepath.Join(dir, sum(b)), b); err != nil {
+		return err
+	}
+	// Persist the first-created history directories before changing the live file.
+	if err = syncDir(filepath.Join(state, "versions")); err != nil {
+		return err
+	}
+	return syncDir(state)
 }
 func (a agent) version(path, hash string) ([]byte, error) {
 	if !digestPattern.MatchString(hash) {
@@ -109,8 +116,7 @@ func replaceFile(root *os.Root, path string, b []byte) error {
 	if err := regularPath(root, path); err != nil {
 		return err
 	}
-	tmp := filepath.Join(filepath.Dir(path), ".mcm-"+sum(b)+".tmp")
-	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0660)
+	f, tmp, err := createStaging(root, filepath.Dir(path), 0660)
 	if err != nil {
 		return err
 	}

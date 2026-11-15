@@ -39,12 +39,13 @@ type config struct {
 	Nodes []nodeConfig `json:"nodes"`
 }
 type server struct {
-	cfg        config
-	client     *http.Client
-	audit      *os.File
-	mu         sync.Mutex
-	cfgMu      sync.RWMutex
-	configPath string
+	cfg         config
+	client      *http.Client
+	audit       *os.File
+	mu          sync.Mutex
+	cfgMu       sync.RWMutex
+	configPath  string
+	auditFailed error
 }
 type auditEvent struct {
 	At        time.Time `json:"at"`
@@ -157,18 +158,24 @@ func (s *server) allowedNode(key, node string) bool {
 func (s *server) record(ev auditEvent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.auditFailed != nil {
+		return s.auditFailed
+	}
 	ev.At = time.Now().UTC()
 	data, e := json.Marshal(ev)
 	if e != nil {
 		return e
 	}
 	if s.audit == nil {
-		return errors.New("audit unavailable")
+		s.auditFailed = errors.New("audit unavailable")
+		return s.auditFailed
 	}
 	if _, e = s.audit.Write(append(data, '\n')); e != nil {
+		s.auditFailed = e
 		return e
 	}
-	return s.audit.Sync()
+	s.auditFailed = s.audit.Sync()
+	return s.auditFailed
 }
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -200,12 +207,15 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 		s.admin(w, r)
 		return
 	}
+	// Config generations are immutable: admin writes publish a deep-copied value.
+	// Never hold this lock across request-body reads or a remote agent call.
 	s.cfgMu.RLock()
-	defer s.cfgMu.RUnlock()
+	view := &server{cfg: s.cfg}
+	s.cfgMu.RUnlock()
 	event := auditEvent{RequestID: requestID(), Phase: "intent", Action: r.Method + " " + r.URL.Path}
 	w.Header().Set("X-Request-ID", event.RequestID)
 	if r.Method == "GET" && r.URL.Path == "/v1/nodes" {
-		id, ok := s.authorize(r, "nodes:read")
+		id, ok := view.authorize(r, "nodes:read")
 		event.KeyID = id
 		if !ok {
 			event.Status = 403
@@ -218,8 +228,8 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		out := []map[string]string{}
-		for _, n := range s.cfg.Nodes {
-			if s.allowedNode(id, n.ID) {
+		for _, n := range view.cfg.Nodes {
+			if view.allowedNode(id, n.ID) {
 				out = append(out, map[string]string{"id": n.ID})
 			}
 		}
@@ -272,22 +282,22 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	id, ok := s.authorize(r, scope)
+	id, ok := view.authorize(r, scope)
 	event.KeyID = id
 	event.NodeID = nodeID
 	if endpoint == "config" {
 		event.Action += " path=" + r.URL.Query().Get("path")
 	}
-	if !ok || !s.allowedNode(id, nodeID) {
+	if !ok || !view.allowedNode(id, nodeID) {
 		event.Status = 403
 		_ = s.record(event)
 		http.Error(w, "forbidden", 403)
 		return
 	}
 	var node *nodeConfig
-	for i := range s.cfg.Nodes {
-		if s.cfg.Nodes[i].ID == nodeID {
-			node = &s.cfg.Nodes[i]
+	for i := range view.cfg.Nodes {
+		if view.cfg.Nodes[i].ID == nodeID {
+			node = &view.cfg.Nodes[i]
 			break
 		}
 	}
@@ -387,7 +397,7 @@ func main() {
 	if auditPath == "" {
 		log.Fatal("MCM_AUDIT_PATH required")
 	}
-	f, e := os.OpenFile(auditPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0600)
+	f, e := openAudit(auditPath)
 	if e != nil {
 		log.Fatal(e)
 	}

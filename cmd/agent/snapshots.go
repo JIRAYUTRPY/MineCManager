@@ -145,6 +145,10 @@ func (a agent) backups(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "backup storage unavailable", 503)
 		return
 	}
+	if err = syncDir(state); err != nil {
+		http.Error(w, "cannot persist backup storage directory", 503)
+		return
+	}
 	suffix := strings.TrimPrefix(r.URL.Path, "/v1/backups")
 	if suffix == "" && r.Method == "GET" {
 		entries, e := os.ReadDir(dir)

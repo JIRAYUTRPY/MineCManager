@@ -18,7 +18,7 @@ Open `http://127.0.0.1:9080/` through an authenticated private connection or HTT
 | admin:nodes | Register and remove nodes |
 | audit:read | Paginated local audit log |
 
-Keys can have `nodes: ["minecraft-01"]`; omit/empty means all nodes. Administrative keys cannot be node restricted. `audit:read` is a global privilege; its results are not node-filtered. Expiration is an optional RFC3339 UTC timestamp. Revocation takes effect for subsequent authorization decisions; requests already in flight may finish before the revocation is applied. Revocation of the last active key administrator is rejected.
+Keys can have `nodes: ["minecraft-01"]`; omit/empty means all nodes. Administrative keys cannot be node restricted. `audit:read` is a global privilege; its results are not node-filtered. Expiration is an optional RFC3339 UTC timestamp. Revocation takes effect for subsequent authorization decisions; requests already authorized may finish even after revocation, but revocation does not wait for slow agent requests and subsequent authorization is denied. Revocation of the last active key administrator is rejected.
 
 - `POST /v1/keys`: `{ "id":"reader", "scopes":["nodes:read"], "nodes":["minecraft-01"], "expires_at":"2027-01-01T00:00:00Z" }`. Returns a generated token once. Optional `token` accepts your own secret (32–1024 characters); use high entropy. Only its digest is persisted.
 - `GET /v1/keys`: metadata only, no tokens or hashes.
@@ -28,3 +28,9 @@ Keys can have `nodes: ["minecraft-01"]`; omit/empty means all nodes. Administrat
 - `GET /v1/audit?offset=0&limit=100`: records and `next_offset`; maximum 1,000 records. Offset is a line index and assumes the file is not truncated/rotated during pagination.
 
 Configuration uses JSON to keep this VM foundation self-contained. PostgreSQL, multi-process replication, federation/SSO and automatic secret distribution are not implemented. Stop the panel before externally editing config or rotating its audit file; restart to reopen/reload. Audit does not store request bodies, key secrets or agent tokens. Intent/result records cover dispatched node operations and state-changing admin operations; rejected requests may lack records when the audit device itself is unavailable.
+
+## Audit failure recovery
+
+A write/fsync failure latches the running panel into an audit-failed state. New privileged operations are rejected until the panel restarts; freeing disk space alone does not silently resume dispatch. At startup the panel checks that the existing log consists of JSON object records, ends in a newline and respects the reader size limit. Invalid or partial records prevent startup without altering the original file.
+
+Stop the panel, preserve a copy of the damaged log, correct the disk/permission issue, and reconcile incomplete intent/result pairs against node state. Recover a validated log or archive the damaged file and deliberately start a new protected log according to your audit policy; retain the archive and reconciliation record. Do not blindly truncate a partial record or retry an uncertain mutation. Startup validation scans the log, so rotate large files while the panel is stopped as described above.

@@ -166,3 +166,40 @@ func TestInventoryWriteRequiresSeparateScope(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 }
+
+func TestRevocationDoesNotWaitForInFlightAgent(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	s, _ := managementPanel(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(entered); <-release; w.WriteHeader(204) }))
+	issued := panelRequest(s, "POST", "/v1/keys", adminToken, `{"id":"slow-reader","scopes":["nodes:read"]}`)
+	if issued.Code != 201 {
+		t.Fatal(issued.Body.String())
+	}
+	var key struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(issued.Body.Bytes(), &key); err != nil {
+		t.Fatal(err)
+	}
+	requestDone := make(chan struct{})
+	go func() { defer close(requestDone); panelRequest(s, "GET", "/v1/nodes/one/status", key.Token, "") }()
+	<-entered
+	revoked := make(chan *httptest.ResponseRecorder, 1)
+	go func() { revoked <- panelRequest(s, "DELETE", "/v1/keys/slow-reader", adminToken, "") }()
+	select {
+	case result := <-revoked:
+		close(release)
+		<-requestDone
+		if result.Code != 200 {
+			t.Fatal(result.Code, result.Body.String())
+		}
+	case <-time.After(2 * time.Second):
+		close(release)
+		<-requestDone
+		<-revoked
+		t.Fatal("revocation blocked behind agent request")
+	}
+	if result := panelRequest(s, "GET", "/v1/nodes/one/status", key.Token, ""); result.Code != 403 {
+		t.Fatal("revoked key accepted")
+	}
+}
