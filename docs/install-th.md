@@ -53,7 +53,16 @@ go build -o bin/mcm-panel ./cmd/panel
 mvn -B -ntp -f paper-bridge/pom.xml verify
 ```
 
-ผลลัพธ์คือ `bin/mcm-agent`, `bin/mcm-panel` และ `paper-bridge/target/mcm-paper-bridge-0.2.0.jar` หากไม่ build Java เอง ดาวน์โหลด artifact `mcm-paper-bridge` จาก GitHub Actions ของ **commit เดียวกับ source** แล้วแตก ZIP ให้ได้ JAR
+ผลลัพธ์คือ `bin/mcm-agent`, `bin/mcm-panel` และ `paper-bridge/target/mcm-paper-bridge-0.2.0.jar` หากไม่ build Java เอง ดาวน์โหลด artifact `mcm-paper-bridge` จาก GitHub Actions ของ **commit เดียวกับ source** แล้วแตก ZIP ให้ได้ JAR และวางไว้ที่ `paper-bridge/target/mcm-paper-bridge-0.2.0.jar` เพื่อให้คำสั่งติดตั้งด้านล่างใช้ได้
+
+บันทึก revision ที่กำลังจะ deploy ก่อนติดตั้ง:
+
+```bash
+git rev-parse HEAD
+sha256sum bin/mcm-agent bin/mcm-panel paper-bridge/target/mcm-paper-bridge-0.2.0.jar
+```
+
+เก็บผลลัพธ์นี้ในบันทึก deploy โดยไม่รวม secrets; checksum ที่คำนวณเองใช้เทียบไฟล์ก่อน/หลังโอน ไม่ใช่หลักฐานยืนยันผู้เผยแพร่ ให้รับ artifact จาก repository/CI ที่เชื่อถือได้
 
 รัน `python3 scripts/smoke-test.py` ได้ก่อนติดตั้ง services โดยพอร์ต 9080–9082 ต้องว่าง การทดสอบนี้ใช้ systemctl/Paper จำลอง ไม่แตะ Minecraft จริง
 
@@ -164,6 +173,24 @@ sudo chmod 0660 /srv/minecraft-host/server/server.properties
 ```
 
 เติม `whitelist.json` ด้วย UUID ของบัญชี Minecraft ที่ตรวจสอบแล้ว: `[{"uuid":"UUID-จริง","name":"ชื่อบัญชีจริง"}]` ใช้ UUID รูปแบบมีขีดจากบัญชีที่ถูกต้อง อย่าใช้ offline UUID หรือปิด `online-mode` เพื่อแก้ปัญหาเข้าเกมไม่ได้ ตั้ง owner `minecraft:minecraft` และ mode `0660` เช่นเดียวกับ config ด้านบน
+
+### ตรวจสิทธิ์ก่อนเริ่ม services
+
+คำสั่งนี้อ่านเฉพาะข้อมูลสิทธิ์ ไม่สร้างไฟล์ในโลกเกม:
+
+```bash
+sudo -u mcm-agent test -w /srv/minecraft-host
+sudo -u mcm-agent test -w /srv/minecraft-host/server
+sudo -u minecraft test -w /srv/minecraft-host/server
+sudo -u mcm-panel test -r /var/lib/mcm-panel/panel.json
+sudo -u mcm-panel test -w /var/lib/mcm-panel
+sudo -u mcm-agent test -w /var/lib/mcm-agent
+sudo -u minecraft test ! -r /etc/mcm/agent.env
+sudo -u minecraft test ! -r /var/lib/mcm-panel/panel.json
+sudo -u minecraft test ! -x /var/lib/mcm-agent
+```
+
+ทุกบรรทัดต้อง exit 0 (ไม่มี output) หากไม่ผ่าน ให้แก้ user/group/permissions ของ path นั้นก่อนเริ่ม services ตรวจ `namei -l PATH` เพื่อดูสิทธิ์ของ parent ทุกชั้น ไม่แก้โดยใช้ `chmod 777` หรือรัน Agent เป็น root
 
 ## 6. ติดตั้ง systemd และ Polkit
 
@@ -313,6 +340,21 @@ sudo certbot renew --dry-run
 
 ทำหลัง single-host ผ่านแล้ว: VM เกมรัน Minecraft + Agent + bridge ส่วน VM ควบคุมรัน Panel + Nginx คู่มือนี้ใช้ private DNS `agent01.internal` ซึ่ง Panel ต้อง resolve ได้
 
+### ย้าย Panel เดิมโดยคง keys และ audit
+
+อย่าสร้าง bootstrap ชุดใหม่บน VM Panel หากต้องการเก็บ key IDs และ audit history เดิม ให้ดำเนินการดังนี้:
+
+1. เตรียม user `mcm-panel`, binary, `/var/lib/mcm-panel`, `/etc/mcm` และ service unit บน VM ใหม่ แต่ยังไม่ start Panel
+2. หยุด `mcm-panel` บน VM เดิมก่อนคัดลอก state ให้ไม่มี API mutation ระหว่างย้าย; Minecraft/Agent ยังทำงานต่อได้
+3. โอน `/var/lib/mcm-panel/panel.json`, `/var/lib/mcm-panel/audit.jsonl` และ `/etc/mcm/panel.env` ผ่านช่องทางผู้ดูแลที่ปลอดภัย ไม่ส่งผ่าน Git หรือแนบใน issue ไม่ต้องโอนไฟล์ `panel.json.lock`
+4. บน VM ใหม่ตั้ง directory `/var/lib/mcm-panel` เป็น owner `mcm-panel:mcm-panel`, mode 0700; ตั้ง JSON/audit เป็น owner เดียวกัน mode 0600 และ `/etc/mcm/panel.env` เป็น root:root mode 0600 ถ้ายังไม่มี audit file ให้ service สร้างเอง ไม่ทับ audit ที่มีอยู่ด้วยไฟล์ว่าง
+5. ออกและติดตั้ง certificates ตามหัวข้อถัดไป แล้วแก้ node URL/Panel env บนเครื่องใหม่ก่อนเริ่ม service
+6. ตรวจ API ผ่าน loopback ของ Panel ใหม่ จากนั้นย้าย DNS/Nginx และตรวจ HTTPS จาก client หลังผ่านจึง `sudo systemctl disable mcm-panel` บน VM เดิมเพื่อป้องกันเปิด controller เก่ากลับมา
+
+หาก rollback การย้าย ให้หยุด Panel ใหม่ก่อน และตรวจว่ามีการสร้าง/revoke key หรือแก้ registration บนเครื่องใหม่หรือไม่ ต้องนำ config/audit ล่าสุดกลับด้วย มิฉะนั้น key ที่ถูก revoke อาจกลับมาใช้ได้จาก config เก่า อย่าเปิดสอง Panel พร้อมกันระหว่างสลับกลับ
+
+### Certificate สำหรับ Agent และ Panel
+
 สร้าง PKI ในเครื่องผู้ดูแลที่เชื่อถือได้ ไม่ใช่ใน game directory ตัวอย่างนี้สร้าง CA ใหม่สำหรับระบบนี้โดยเฉพาะ; ถ้ามีองค์กร PKI ให้ขอ certificate จากระบบนั้นแทน:
 
 ```bash
@@ -384,6 +426,21 @@ HTTP API ของ bridge ยังอยู่บน loopback VM เกม ไ�
 
 หลังผ่านจึง `sudo systemctl enable minecraft` เปิดพอร์ตเกมตามนโยบาย และเก็บบันทึก version/build/checksum ที่ deploy
 
+### ทดสอบสิทธิ์และหมุนเวียน Panel key
+
+หลัง bootstrap ทำงาน ให้ใช้หน้า Administration สร้าง key ตามหน้าที่ เช่น `nodes:read,plugins:read` พร้อม node restriction `minecraft-01` ทดสอบ key ใหม่นี้ด้วยการอ่าน status และลอง POST action: ต้องได้ 403 โดยไม่มีการสั่งงาน Agent
+
+เมื่อต้องเปลี่ยน admin key ให้สร้าง key ใหม่ที่มี `admin:keys` และ scopes ที่ต้องใช้ เก็บ token ที่แสดงครั้งเดียวใน password manager ทดสอบ login/API ด้วย key ใหม่ในอีก session แล้วจึง revoke key เก่า ห้าม revoke key ที่กำลังใช้โดยยังไม่เก็บและทดสอบ key ใหม่ หลัง revoke bootstrap สำเร็จ ไฟล์ `/root/mcm-bootstrap.key` จะใช้ login ไม่ได้อีก ให้จัดการไฟล์นี้ตามนโยบาย secrets ของคุณ
+
+Agent token และ Paper bridge token เปลี่ยนผ่าน env files คนละขั้นตอนกับ Panel key:
+
+| Secret | ต้องแก้ที่ใดให้ตรงกัน | Service ที่ต้อง restart |
+|---|---|---|
+| Agent token | `MCM_AGENT_TOKEN` ใน agent.env และ `MCM_NODE_01_TOKEN` ใน panel.env | mcm-agent, mcm-panel |
+| Paper token | `MCM_PAPER_TOKEN` ใน agent.env และ paper.env | mcm-agent, minecraft |
+
+ระบบยังไม่รองรับรับ token เก่า/ใหม่พร้อมกัน จัดช่วงเปลี่ยนให้ไม่มี mutation ค้าง และคาดว่าจะเรียก API ไม่ได้ชั่วคราวจนทุก service โหลดค่าใหม่ครบ อย่ารันสคริปต์ bootstrap ซ้ำเพื่อหมุนเวียน secret
+
 ## 11. อัปเดตและกู้คืน
 
 1. ตรวจ commit ที่จะใช้และให้ CI ผ่าน เก็บ binary/JAR ชุดเดิมและ backup config/state
@@ -411,6 +468,7 @@ Restore ต้องมีพื้นที่ staging และจะเก็
 | เข้าเกมไม่ได้ | Paper startup, TCP 25565, version, `online-mode`, whitelist UUID; เป็นคนละ port กับ Panel |
 | restore rename ล้มเหลว | parent เขียนได้หรือไม่, root เป็น mount point/symlink หรือไม่, staging อยู่ filesystem เดียวกับ root |
 | เกมเขียนไม่ได้หลัง restore | `mcm-agent` primary group = minecraft, Minecraft อยู่กลุ่มเดียวกัน, root 0770 และ restored files group writable |
+| ย้าย Panel แล้ว key เก่าไม่ทำงานหรือ audit หาย | ตรวจว่าโอน panel.json/audit เดิมก่อน start และไม่ได้สร้าง bootstrap ใหม่; หยุด service ก่อนแก้ state |
 | certificate verify failed | ตรวจชื่อ SAN, CA, วันหมดอายุ, client/server EKU และนาฬิกา VM |
 
 ## เอกสารอ้างอิง
