@@ -1,24 +1,32 @@
 # MineCManager
 
-VM-based Minecraft server management foundation.
+Go control plane and VM agent for managing a systemd-hosted Minecraft server. The panel includes a Thai admin UI, scoped API keys, node registration, plugin/config versioning, stopped-server backups and verified restore.
 
-## Current implementation
+## Installation
 
-Go agent prototype with bearer-token authorization, loopback-only HTTP listener, allowlisted systemd actions, read-only service status, and confined directory listing. This is not production ready.
+[คู่มือติดตั้งภาษาไทย — Ubuntu, systemd, Nginx/HTTPS และ mTLS](docs/install-th.md)
 
-```bash
-go test ./...
-export MCM_AGENT_TOKEN="$(openssl rand -hex 32)"
-export MCM_SERVER_ROOT=/srv/minecraft
-export MCM_SYSTEMD_UNIT=minecraft.service
-go run ./cmd/agent
-```
+## Build and verify
 
-Example (run on the VM):
+Linux, Go 1.25+, Python 3 (smoke test only):
 
 ```bash
-curl -H "Authorization: Bearer $MCM_AGENT_TOKEN" http://127.0.0.1:9081/v1/status
-curl -X POST -H "Authorization: Bearer $MCM_AGENT_TOKEN" -H 'Content-Type: application/json' -d '{"action":"restart"}' http://127.0.0.1:9081/v1/actions
+go build -o bin/mcm-agent ./cmd/agent
+go build -o bin/mcm-panel ./cmd/panel
+go test -race ./...
+go vet ./...
+python3 scripts/smoke-test.py
 ```
 
-See [architecture and security limitations](docs/architecture.md). Do not expose the agent directly to the public internet. No deployment is performed by this repository.
+The smoke test starts both binaries with an isolated fake systemctl; it does not operate a live VM. Optional browser verification requires Playwright with Chromium: `MCM_UI_TEST=1 python3 scripts/smoke-test.py`. Set `MCM_CHROMIUM` to a system Chromium executable if needed.
+
+- [Setup and operational recovery](docs/operations.md)
+- [Panel authorization, keys, node registration and audit](docs/panel.md)
+- [Plugin/config management](docs/plugin-management.md)
+- [Backup and restore](docs/backup.md)
+- [Architecture and boundaries](docs/architecture.md)
+- [Acceptance scope and remaining product work](docs/next-steps.md)
+- [Paper runtime bridge](docs/paper-bridge.md)
+- [OpenAPI](api/openapi.yaml)
+
+This repository manages VM server files and service lifecycle. An optional Paper bridge adds online player inventory inspection, controlled item replacement and bounded live resource aggregates; full persistent world indexing remains separate. No production host is configured by building or testing this repository.

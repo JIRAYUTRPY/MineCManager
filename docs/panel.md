@@ -1,30 +1,36 @@
-# Panel API prototype
+# Panel API and key lifecycle
 
-The panel listens on `127.0.0.1:9080`. It provides a minimal control-plane API, not a public endpoint or a multi-VM network implementation. Node URLs are deliberately restricted to loopback IP addresses; remote nodes require a separate authenticated tunnel or socket forwarding solution and further security review.
+Start with `config/panel.example.json`. Generate a 32-byte random key, store its SHA-256 digest in the bootstrap key entry, and retain the original only in your secret manager. `MCM_PANEL_CONFIG` points to the writable config file; its parent must be writable for atomic replacement. `MCM_AUDIT_PATH` points to an append-only-by-convention JSONL log. Both files and their parent directory must be private to the panel user.
 
-## Configuration
+Open `http://127.0.0.1:9080/` through an authenticated private connection or HTTPS reverse proxy. The Thai UI supports node service actions, plugins, config editing, backups/restores, key administration, node registration and audit reads. Key permissions are enforced by the API, including when UI controls are visible to a read-only user.
 
-Generate a random API key and store only its SHA-256 digest in the config:
+## Scopes
 
-```bash
-KEY="$(openssl rand -hex 32)"
-printf '%s' "$KEY" | sha256sum
-```
+| Scope | Operations |
+|---|---|
+| nodes:read | Visible node list, live status, files listing, metrics |
+| nodes:control | Fixed-unit start, stop, restart |
+| plugins:read / plugins:write | Inventory/history / install, replace, restore, delete |
+| configs:read / configs:write | Config content/history / edit and rollback |
+| backups:read / backups:write / backups:restore | Discovery/list / create / verified restore |
+| players:read / inventory:read / inventory:write / resources:read | Paper online players / inventory inspection / guarded slot replacement / live aggregates |
+| admin:keys | List key metadata, issue, revoke |
+| admin:nodes | Register and remove nodes |
+| audit:read | Paginated local audit log |
 
-Copy `config/panel.example.json` to a private location, replace the placeholder digest, and set `MCM_PANEL_CONFIG` to its absolute path. Set `MCM_NODE_01_TOKEN` to the same bearer token as the agent. Set `MCM_AUDIT_PATH` to a protected, append-only operational log location. Keep the original key in a secrets manager, not in Git.
+Keys can have `nodes: ["minecraft-01"]`; omit/empty means all nodes. Administrative keys cannot be node restricted. `audit:read` is a global privilege; its results are not node-filtered. Expiration is an optional RFC3339 UTC timestamp. Revocation takes effect for subsequent authorization decisions; requests already authorized may finish even after revocation, but revocation does not wait for slow agent requests and subsequent authorization is denied. Revocation of the last active key administrator is rejected.
 
-```bash
-MCM_PANEL_CONFIG=/etc/mcm/panel.json MCM_AUDIT_PATH=/var/log/mcm/audit.jsonl go run ./cmd/panel
-```
+- `POST /v1/keys`: `{ "id":"reader", "scopes":["nodes:read"], "nodes":["minecraft-01"], "expires_at":"2027-01-01T00:00:00Z" }`. Returns a generated token once. Optional `token` accepts your own secret (32–1024 characters); use high entropy. Only its digest is persisted.
+- `GET /v1/keys`: metadata only, no tokens or hashes.
+- `DELETE /v1/keys/{id}`: revoke, preserving the key record for audit identity. Rotate by creating a replacement, switching callers, then revoking the old key. IDs/hashes cannot be reused.
+- `POST /v1/nodes`: `{ "id":"minecraft-02", "url":"https://agent.internal:9081", "token_env":"MCM_NODE_02_TOKEN" }`. Token must already exist in the panel process environment and contain at least 32 characters. URLs allow loopback HTTP or verified HTTPS. Redirects and environment HTTP proxies are disabled. Provision secrets/certificates outside the API.
+- `DELETE /v1/registrations/{nodeId}`: remove routing registration, without touching the VM. Re-register to change URL/token reference. Review existing node-restricted keys before reusing an ID.
+- `GET /v1/audit?offset=0&limit=100`: records and `next_offset`; maximum 1,000 records. Offset is a line index and assumes the file is not truncated/rotated during pagination.
 
-## Routes
+Configuration uses JSON to keep this VM foundation self-contained. PostgreSQL, multi-process replication, federation/SSO and automatic secret distribution are not implemented. Stop the panel before externally editing config or rotating its audit file; restart to reopen/reload. Audit does not store request bodies, key secrets or agent tokens. Intent/result records cover dispatched node operations and state-changing admin operations; rejected requests may lack records when the audit device itself is unavailable.
 
-- `GET /v1/nodes` requires `nodes:read`
-- `GET /v1/nodes/{id}/status` requires `nodes:read`
-- `POST /v1/nodes/{id}/actions` with JSON `{"action":"restart"}` requires `nodes:control`
+## Audit failure recovery
 
-Use `Authorization: Bearer <API_KEY>`. Audit records include key ID, node ID, action, result status, and timestamp. No raw tokens are logged.
+A write/fsync failure latches the running panel into an audit-failed state. New privileged operations are rejected until the panel restarts; freeing disk space alone does not silently resume dispatch. At startup the panel checks that the existing log consists of JSON object records, ends in a newline and respects the reader size limit. Invalid or partial records prevent startup without altering the original file.
 
-## Security limitations
-
-This is a **prototype**. Keys are configured manually and cannot be created or revoked via API yet. No database, tenant isolation, persistent node enrollment, TLS, UI, or central role management. Audit writes are best-effort and not tamper-evident. The HTTP client is configured to reject redirects, but network and transport policy must be hardened before remote-node support. Do not expose panel or agent ports publicly.
+Stop the panel, preserve a copy of the damaged log, correct the disk/permission issue, and reconcile incomplete intent/result pairs against node state. Recover a validated log or archive the damaged file and deliberately start a new protected log according to your audit policy; retain the archive and reconciliation record. Do not blindly truncate a partial record or retry an uncertain mutation. Startup validation scans the log, so rotate large files while the panel is stopped as described above.

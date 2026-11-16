@@ -1,94 +1,1332 @@
 openapi: 3.0.3
 info:
-  title: MineCManager Control Plane
-  version: 0.1.0
-  description: Experimental loopback-only API. Do not expose directly to the internet.
+  title: MineCManager VM Control Plane
+  version: 0.2.0
+  description: Panel API. Bearer scopes and optional node restrictions. Mutations
+    require durable audit intent. Agent shares the node suffix routes and uses its
+    separate bearer token; remote agents require mTLS. Unknown mutation outcomes must
+    be inspected before retry.
 servers:
-  - url: http://127.0.0.1:9080
+- url: http://127.0.0.1:9080
 security:
-  - bearerAuth: []
+- bearerAuth: []
 paths:
   /v1/nodes:
     get:
-      summary: List registered nodes
-      operationId: listNodes
+      summary: List nodes visible to this key
+      operationId: get__v1_nodes
       x-required-scope: nodes:read
       responses:
         '200':
-          description: Node identifiers
+          description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
                   type: object
-                  required: [id]
                   properties:
-                    id:
+                    id: &id001
                       type: string
+        '400':
+          description: Invalid request
         '403':
-          description: Missing or insufficient API key
-  /v1/nodes/{nodeId}/status:
-    get:
-      summary: Get Minecraft service state
-      operationId: getNodeStatus
-      x-required-scope: nodes:read
-      parameters:
-        - $ref: '#/components/parameters/nodeId'
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+    post:
+      summary: Persist node registration; provision token environment first
+      operationId: post__v1_nodes
+      x-required-scope: admin:nodes
+      responses:
+        '201':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Node'
+  /v1/registrations/{nodeId}:
+    delete:
+      summary: Remove node registration
+      operationId: delete__v1_registrations_nodeId
+      x-required-scope: admin:nodes
       responses:
         '200':
-          description: Service status
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/status:
+    get:
+      summary: Read live service state
+      operationId: get__v1_nodes_nodeId_status
+      x-required-scope: nodes:read
+      responses:
+        '200':
+          description: Success
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  state:
-                    type: string
+                  state: *id001
+        '400':
+          description: Invalid request
         '403':
-          description: Missing or insufficient API key
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
         '404':
-          description: Node not found
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
         '502':
-          description: Agent unavailable
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/metrics:
+    get:
+      summary: Read host disk/load and agent runtime metrics
+      operationId: get__v1_nodes_nodeId_metrics
+      x-required-scope: nodes:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  observed_at: *id001
+                  uptime_seconds:
+                    type: number
+                  logical_cpus:
+                    type: integer
+                  loadavg: *id001
+                  disk_available_bytes:
+                    type: integer
+                  disk_total_bytes:
+                    type: integer
+                  agent_heap_bytes:
+                    type: integer
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/files:
+    get:
+      summary: List server directory entries
+      operationId: get__v1_nodes_nodeId_files
+      x-required-scope: nodes:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name: *id001
+                    directory:
+                      type: boolean
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: path
+        in: query
+        required: false
+        schema: *id001
   /v1/nodes/{nodeId}/actions:
     post:
-      summary: Control Minecraft service
-      operationId: controlNode
+      summary: Start, stop or restart the fixed systemd unit
+      operationId: post__v1_nodes_nodeId_actions
       x-required-scope: nodes:control
+      responses:
+        '204':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
       parameters:
-        - $ref: '#/components/parameters/nodeId'
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [action]
               properties:
                 action:
                   type: string
-                  enum: [start, stop, restart]
+                  enum:
+                  - start
+                  - stop
+                  - restart
+              required:
+              - action
+  /v1/nodes/{nodeId}/plugins:
+    get:
+      summary: List installed JAR metadata
+      operationId: get__v1_nodes_nodeId_plugins
+      x-required-scope: plugins:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plugin'
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/plugins/{filename}:
+    get:
+      summary: Read current plugin metadata and saved version hashes
+      operationId: get__v1_nodes_nodeId_plugins_filename
+      x-required-scope: plugins:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PluginDetail'
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: filename
+        in: path
+        required: true
+        schema: *id001
+    put:
+      summary: Validate and install or replace JAR while service is inactive (maximum
+        16 MiB)
+      operationId: put__v1_nodes_nodeId_plugins_filename
+      x-required-scope: plugins:write
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+        '201':
+          description: New plugin installed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: filename
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: false
+        schema: *id001
+        description: Quoted current SHA-256, mandatory when target exists.
+      requestBody:
+        required: true
+        content:
+          application/java-archive:
+            schema:
+              type: string
+              format: binary
+    post:
+      summary: Restore a saved plugin version while inactive
+      operationId: post__v1_nodes_nodeId_plugins_filename
+      x-required-scope: plugins:write
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+        '201':
+          description: Deleted plugin restored
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: filename
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: false
+        schema: *id001
+        description: Quoted current SHA-256, mandatory when target exists.
+      - name: If-None-Match
+        in: header
+        required: false
+        schema: *id001
+        description: Use * when restoring a deleted plugin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Version'
+    delete:
+      summary: Save version then delete plugin while inactive
+      operationId: delete__v1_nodes_nodeId_plugins_filename
+      x-required-scope: plugins:write
       responses:
         '204':
-          description: Action completed
+          description: Success
         '400':
-          description: Invalid action
+          description: Invalid request
         '403':
-          description: Missing or insufficient API key
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
         '404':
-          description: Node not found
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
         '502':
-          description: Agent unavailable
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: filename
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Quoted current SHA-256.
+  /v1/nodes/{nodeId}/config:
+    get:
+      summary: Read UTF-8 configuration and version hashes
+      operationId: get__v1_nodes_nodeId_config
+      x-required-scope: configs:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - &id002
+        name: path
+        in: query
+        required: true
+        schema: *id001
+    put:
+      summary: Validate and save existing config while inactive (maximum 1 MiB)
+      operationId: put__v1_nodes_nodeId_config
+      x-required-scope: configs:write
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Quoted current SHA-256.
+      - *id002
+      requestBody:
+        required: true
+        content:
+          text/plain:
+            schema: *id001
+    post:
+      summary: Restore config version while inactive
+      operationId: post__v1_nodes_nodeId_config
+      x-required-scope: configs:write
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Quoted current SHA-256.
+      - *id002
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Version'
+  /v1/nodes/{nodeId}/backup/manifest:
+    get:
+      summary: Read legacy selected-path discovery manifest; not a backup
+      operationId: get__v1_nodes_nodeId_backup_manifest
+      x-required-scope: backups:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+                  skipped:
+                    type: array
+                    items: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/backups:
+    get:
+      summary: List published backup IDs
+      operationId: get__v1_nodes_nodeId_backups
+      x-required-scope: backups:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+    post:
+      summary: Snapshot complete stopped server root; limit 10 GiB / 100,000 files
+      operationId: post__v1_nodes_nodeId_backups
+      x-required-scope: backups:write
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/backups/{backupId}/restore:
+    post:
+      summary: Verify complete snapshot, replace stopped root and preserve previous
+        root
+      operationId: post__v1_nodes_nodeId_backups_backupId_restore
+      x-required-scope: backups:restore
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restored: *id001
+                  previous_root: *id001
+                  restart_required:
+                    type: boolean
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: backupId
+        in: path
+        required: true
+        schema: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirm: *id001
+              required:
+              - confirm
+  /v1/keys:
+    get:
+      summary: List key metadata without secret hashes
+      operationId: get__v1_keys
+      x-required-scope: admin:keys
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Key'
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+    post:
+      summary: Create scoped API key; token returned once
+      operationId: post__v1_keys
+      x-required-scope: admin:keys
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: *id001
+                  token: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyCreate'
+  /v1/keys/{keyId}:
+    delete:
+      summary: Revoke API key; last active key administrator protected
+      operationId: delete__v1_keys_keyId
+      x-required-scope: admin:keys
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: keyId
+        in: path
+        required: true
+        schema: *id001
+  /v1/audit:
+    get:
+      summary: Read local audit records using line offsets
+      operationId: get__v1_audit
+      x-required-scope: audit:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  records:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEvent'
+                  next_offset:
+                    type: integer
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+  /v1/nodes/{nodeId}/paper/players:
+    get:
+      summary: List online Paper player UUIDs and names
+      operationId: get__v1_nodes_nodeId_paper_players
+      x-required-scope: players:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    uuid: *id001
+                    name: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/paper/players/{playerUUID}/inventory:
+    get:
+      summary: Inspect online player inventory slots and comparison hashes
+      operationId: get__v1_nodes_nodeId_paper_players_playerUUID_inventory
+      x-required-scope: inventory:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid: *id001
+                  name: *id001
+                  observed_at: *id001
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slot:
+                          type: integer
+                        material: *id001
+                        amount:
+                          type: integer
+                        display_name: *id001
+                        sha256: *id001
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: playerUUID
+        in: path
+        required: true
+        schema: *id001
+  /v1/nodes/{nodeId}/paper/players/{playerUUID}/inventory/{slot}:
+    put:
+      summary: Replace an online player slot (0..40); amount zero clears it
+      operationId: put__v1_nodes_nodeId_paper_players_playerUUID_inventory_slot
+      x-required-scope: inventory:write
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
+      - name: playerUUID
+        in: path
+        required: true
+        schema: *id001
+      - name: slot
+        in: path
+        required: true
+        schema: *id001
+      - name: If-Match
+        in: header
+        required: true
+        schema: *id001
+        description: Quoted current slot SHA-256, read from inventory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                material: *id001
+                amount:
+                  type: integer
+                  minimum: 0
+                  maximum: 64
+                display_name:
+                  type: string
+                  maxLength: 128
+                lore:
+                  type: array
+                  maxItems: 16
+                  items:
+                    type: string
+                    maxLength: 256
+              required:
+              - material
+              - amount
+  /v1/nodes/{nodeId}/paper/resources:
+    get:
+      summary: Bounded loaded ground item and online inventory aggregates; excludes
+        offline/unloaded/container data
+      operationId: get__v1_nodes_nodeId_paper_resources
+      x-required-scope: resources:read
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  observed_at: *id001
+                  scope: *id001
+                  truncated:
+                    type: boolean
+                  ground:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                  players:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        '400':
+          description: Invalid request
+        '403':
+          description: Missing, revoked, expired, insufficient or node-restricted
+            key
+        '404':
+          description: Resource not found
+        '409':
+          description: Service not stopped or operation conflicts
+        '412':
+          description: Current SHA-256 precondition failed
+        '413':
+          description: Request size limit exceeded
+        '500':
+          description: Operation failed; inspect state before retry
+        '502':
+          description: Agent unavailable or unknown operation outcome
+        '503':
+          description: Audit or persistence unavailable; operation may have completed
+            if result persistence failed
+      parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema: *id001
 components:
-  parameters:
-    nodeId:
-      name: nodeId
-      in: path
-      required: true
-      schema:
-        type: string
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
+  schemas:
+    Plugin:
+      type: object
+      properties:
+        name: *id001
+        size:
+          type: integer
+        sha256: *id001
+      required:
+      - name
+      - size
+      - sha256
+    PluginDetail:
+      type: object
+      properties:
+        plugin:
+          allOf:
+          - $ref: '#/components/schemas/Plugin'
+          nullable: true
+        versions:
+          type: array
+          items: *id001
+    Config:
+      type: object
+      properties:
+        path: *id001
+        content: *id001
+        sha256: *id001
+        versions:
+          type: array
+          items: *id001
+    Version:
+      type: object
+      properties:
+        version:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+      required:
+      - version
+    File:
+      type: object
+      properties:
+        path: *id001
+        size:
+          type: integer
+        sha256: *id001
+    Backup:
+      type: object
+      properties:
+        id: *id001
+        created:
+          type: string
+          format: date-time
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+    Node:
+      type: object
+      properties:
+        id: *id001
+        url:
+          type: string
+          format: uri
+        token_env: *id001
+      required:
+      - id
+      - url
+      - token_env
+    KeyCreate:
+      type: object
+      properties:
+        id: *id001
+        token:
+          type: string
+          minLength: 32
+          description: Optional custom secret; omitted means cryptographically generated.
+        scopes:
+          type: array
+          items: *id001
+        nodes:
+          type: array
+          items: *id001
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - scopes
+    Key:
+      type: object
+      properties:
+        id: *id001
+        scopes:
+          type: array
+          items: *id001
+        nodes:
+          type: array
+          items: *id001
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        revoked:
+          type: boolean
+    AuditEvent:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        request_id: *id001
+        phase: *id001
+        key_id: *id001
+        node_id: *id001
+        action: *id001
+        status:
+          type: integer
