@@ -17,6 +17,9 @@ jobs:
       - run: go vet ./...
       - run: go build ./...
       - run: python3 scripts/smoke-test.py
+      - run: python3 scripts/test-fleet-remote.py
+      - run: sh -n deploy/panel-entrypoint.sh
+      - run: docker compose config --quiet
       - run: test -z "$(gofmt -l cmd internal)"
   browser:
     runs-on: ubuntu-latest
@@ -31,6 +34,32 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: MCM_UI_TEST=1 python3 scripts/smoke-test.py
+      - run: MCM_FLEET_UI_TEST=1 go test -v ./cmd/panel -run TestFleetBrowser -count=1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fleet-browser-screenshots
+          path: /tmp/mcm-fleet-*.png
+  panel-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build
+      - run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9080/fleet > /tmp/fleet.html; then break; fi
+            sleep 2
+          done
+          test -s /tmp/fleet.html
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9080/v1/fleet/hosts)" = 403
+          docker compose exec -T panel test -s /data/admin-key.txt
+          docker compose restart panel
+          sleep 3
+          curl -fsS http://127.0.0.1:9080/fleet > /dev/null
+      - if: always()
+        run: docker compose logs --tail=100 panel
+      - if: always()
+        run: docker compose down
   paper:
     runs-on: ubuntu-latest
     steps:

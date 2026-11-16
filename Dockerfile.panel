@@ -1,0 +1,13 @@
+FROM golang:1.25.5-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -o /mcm-panel ./cmd/panel
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates su-exec && addgroup -S -g 10001 mcm && adduser -S -u 10001 -G mcm mcm
+COPY --from=build /mcm-panel /usr/local/bin/mcm-panel
+COPY deploy/panel-entrypoint.sh /usr/local/bin/panel-entrypoint
+ENV MCM_PANEL_CONFIG=/data/panel.json MCM_AUDIT_PATH=/data/audit.jsonl MCM_FLEET_VAULT=/data/fleet.vault MCM_VAULT_KEY_FILE=/data/vault.key MCM_PANEL_LISTEN=0.0.0.0:9080
+EXPOSE 9080
+ENTRYPOINT ["sh", "/usr/local/bin/panel-entrypoint"]

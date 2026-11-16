@@ -1,0 +1,195 @@
+openapi: 3.0.3
+info:
+  title: MineCManager Fleet API
+  version: 0.3.0
+  description: |
+    Privileged panel-only control plane. Every route requires admin:fleet, granting
+    root access across all enrolled hosts and cloud credentials. Separate from
+    legacy Agent routes in openapi.yaml. Job inputs/results are encrypted at rest.
+servers:
+  - url: /v1/fleet
+security:
+  - bearerAuth: []
+paths:
+  /discover:
+    post:
+      summary: Discover SSH fingerprint without credentials; verify out of band before enrollment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, port]
+              properties:
+                address: {type: string, description: Reachable IPv4 or IPv6 address}
+                port: {type: integer, minimum: 1, maximum: 65535}
+      responses:
+        '200': {description: SHA256 fingerprint and trust notice}
+        '502': {description: SSH discovery failed}
+  /hosts:
+    get:
+      summary: List hosts without password/private key
+      responses:
+        '200': {description: Host array; secret properties omitted}
+    post:
+      summary: Enroll a new SSH host; submit a metrics job to test connectivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Host'}
+      responses:
+        '201': {description: Persisted host without secrets}
+        '409': {description: Host ID already exists}
+    put:
+      summary: Explicitly replace host connection details and credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Host'}
+      responses:
+        '201': {description: Updated host without secrets}
+  /hosts/{id}:
+    delete:
+      summary: Unregister host and schedules; does not change the VM
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+      responses:
+        '200': {description: Removed}
+        '409': {description: Host has queued or running jobs}
+  /jobs:
+    get:
+      summary: Latest 100 jobs, newest first; input omitted
+      responses:
+        '200': {description: Job array including result/error}
+    post:
+      summary: Enqueue a durable privileged operation
+      description: |
+        All inputs are JSON. host is required except dns/r2-list/r2-download.
+        action is assigned by the server. Caller-supplied upload_url, download_url
+        and r2_key are removed. Jobs recheck actor privileges before dispatch.
+
+        Input shapes:
+        - metrics, servers: {}
+        - deploy: {server, platform, version, ram_mb, port, eula:true}
+        - files, read: {path:absolute-path}
+        - write: {path, confirm:same-path, sha256:previous-hash, content:base64}
+        - service: {service:name.service, verb:start|stop|restart|status|logs, confirm:service-name}
+        - command: {command:bash-text, confirm:ROOT}
+        - backup: {server, retain:1..365, r2:boolean}
+        - backups: {server}
+        - restore: {server, backup:filename, confirm:server-id}
+        - r2-restore: {server, key:object-key, sha256:original-hash, confirm:server-id}
+        - dns: {zone:zone-id, name, type:A|AAAA|CNAME|SRV, content, data:SRV-object, record_id:optional, web:boolean}
+        - r2-list: {}
+        - r2-download: {key:managed-object-key}
+
+        File editor limit 1 MiB; commands non-interactive, 120 seconds and 1 MiB
+        stdout. Backup jobs stop/restart an active server. Restore requires it
+        stopped and leaves it stopped. DNS web defaults false. A signed R2
+        download URL in a result is a secret and expires after 10 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                host: {type: string}
+                action:
+                  type: string
+                  enum: [metrics, servers, deploy, files, read, write, service, command, backup, backups, restore, r2-restore, dns, r2-list, r2-download]
+                input: {type: object, additionalProperties: true}
+      responses:
+        '202': {description: Queued job; poll /jobs/id}
+        '400': {description: Unknown host/action or invalid request}
+        '429': {description: Maximum 100 queued/running jobs}
+        '503': {description: Vault/audit failure; inspect current state before retry}
+  /jobs/{id}:
+    get:
+      summary: Read job status and result; input omitted
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+      responses:
+        '200': {description: 'Job with status queued, running, succeeded, failed or interrupted'}
+        '404': {description: Job not found or history expired}
+  /cloud:
+    get:
+      summary: Read account/bucket and configured flags; never returns credentials
+      responses:
+        '200': {description: Redacted configuration}
+    put:
+      summary: Save Cloudflare credentials; empty secret fields retain old values
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: {type: string, writeOnly: true, description: DNS API token}
+                account: {type: string, pattern: '^[a-f0-9]{32}$'}
+                bucket: {type: string}
+                access_key: {type: string, writeOnly: true}
+                secret_key: {type: string, writeOnly: true}
+      responses:
+        '200': {description: Saved}
+  /zones:
+    get:
+      summary: Cloudflare zones, first 50, using stored DNS token
+      responses:
+        '200': {description: Cloudflare zones response}
+        '502': {description: Cloudflare request failed}
+  /schedules:
+    get:
+      summary: Schedules keyed by ID
+      responses:
+        '200': {description: Schedule map}
+    put:
+      summary: Create/replace backup schedule; next run starts one interval from now
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, host, server, every_hours, retain, enabled]
+              properties:
+                id: {type: string}
+                host: {type: string}
+                server: {type: string}
+                every_hours: {type: integer, minimum: 1, maximum: 8760}
+                retain: {type: integer, minimum: 1, maximum: 365, description: Local backup count only; R2 uses bucket lifecycle}
+                r2: {type: boolean}
+                enabled: {type: boolean}
+      responses:
+        '200': {description: Schedule including actor and next UTC timestamp}
+  /schedules/{id}:
+    delete:
+      summary: Remove schedule; does not cancel an already running backup
+      parameters:
+        - {$ref: '#/components/parameters/ID'}
+      responses:
+        '200': {description: Removed}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer}
+  parameters:
+    ID: {name: id, in: path, required: true, schema: {type: string}}
+  schemas:
+    Host:
+      type: object
+      required: [id, address, port, user, fingerprint]
+      properties:
+        id: {type: string, pattern: '^[a-z][a-z0-9-]{0,31}$'}
+        address: {type: string, description: Explicit reachable IP; no hostname/shell input}
+        public_ip: {type: string}
+        private_ip: {type: string}
+        port: {type: integer, minimum: 1, maximum: 65535}
+        user: {type: string}
+        fingerprint: {type: string, description: Confirmed SSH SHA256 fingerprint}
+        password: {type: string, writeOnly: true}
+        private_key: {type: string, writeOnly: true, description: Unencrypted PEM private key; password or key required}
