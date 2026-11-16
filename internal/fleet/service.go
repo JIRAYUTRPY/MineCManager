@@ -306,6 +306,12 @@ func (s *Service) tick(ctx context.Context) {
 	}
 	now := time.Now().UTC()
 	dirty := false
+	pending := 0
+	for _, j := range s.Store.data.Jobs {
+		if j.Status == "queued" || j.Status == "running" {
+			pending++
+		}
+	}
 	for id, sc := range s.Store.data.Schedules {
 		if !sc.Enabled || now.Before(sc.Next) {
 			continue
@@ -325,9 +331,10 @@ func (s *Service) tick(ctx context.Context) {
 				break
 			}
 		}
-		if busy {
+		if busy || pending >= 100 {
 			continue
 		}
+		pending++
 		s.Store.data.Jobs = append(s.Store.data.Jobs, Job{ID: newID(), Host: sc.Host, Action: "backup", Status: "queued", Actor: sc.Actor, Created: now, Input: map[string]any{"action": "backup", "server": sc.Server, "retain": sc.Retain, "r2": sc.R2}})
 	}
 	index := -1
@@ -427,8 +434,8 @@ func (s *Service) tick(ctx context.Context) {
 		s.Store.data.Jobs[index].Result = result
 	}
 	// Keep a bounded recent history. Audit remains the durable operation ledger.
-	if len(s.Store.data.Jobs) > 1000 {
-		s.Store.data.Jobs = s.Store.data.Jobs[len(s.Store.data.Jobs)-1000:]
+	for len(s.Store.data.Jobs) > 1000 && s.Store.data.Jobs[0].Status != "queued" && s.Store.data.Jobs[0].Status != "running" {
+		s.Store.data.Jobs = s.Store.data.Jobs[1:]
 	}
 	_ = s.Store.save()
 }

@@ -6,6 +6,8 @@ import socket, stat, subprocess, sys, tarfile, tempfile, time, urllib.parse, url
 
 BASE = pathlib.Path('/srv/minecmanager')
 STATE = pathlib.Path('/var/lib/minecmanager')
+UNITS = pathlib.Path('/etc/systemd/system')
+JVMS = pathlib.Path('/usr/lib/jvm')
 UA = 'MineCManager/0.3 (https://github.com/JIRAYUTRPY/MineCManager)'
 
 def run(*args, timeout=1800):
@@ -96,7 +98,7 @@ def deploy(q):
     if q.get('eula') is not True: raise ValueError('explicit Minecraft EULA acceptance required')
     if not 1024 <= port <= 65535 or not 512 <= ram <= 1048576: raise ValueError('invalid port or RAM')
     if root.exists() or (STATE/'servers'/(sid+'.json')).exists(): raise ValueError('server ID/path exists; deploy never overwrites it')
-    if pathlib.Path('/etc/systemd/system/'+unit(sid)).exists(): raise ValueError('service already exists')
+    if (UNITS/unit(sid)).exists(): raise ValueError('service already exists')
     records = list((STATE/'servers').glob('*.json'))
     reserved = sum(json.loads(p.read_text())['ram_mb'] for p in records)
     if ram*1048576 + reserved*1048576 > metrics()['ram_total'] - 512*1048576: raise ValueError('insufficient unreserved RAM (512 MiB OS reserve)')
@@ -108,7 +110,7 @@ def deploy(q):
     run('apt-get','update')
     run('env','DEBIAN_FRONTEND=noninteractive','apt-get','install','-y','openjdk-'+str(java)+'-jre-headless','ca-certificates')
     try: pwd.getpwnam('mcm-game')
-    except KeyError: run('useradd','--system','--home-dir',str(BASE),'--shell','/usr/sbin/nologin','mcm-game')
+    except KeyError: run('useradd','--system','--user-group','--home-dir',str(BASE),'--shell','/usr/sbin/nologin','mcm-game')
     BASE.mkdir(mode=0o755, parents=True, exist_ok=True)
     root.mkdir(mode=0o750)
     try:
@@ -129,10 +131,10 @@ def deploy(q):
         account=pwd.getpwnam('mcm-game')
         for p in [root,*root.iterdir()]: os.chown(p,account.pw_uid,account.pw_gid)
         # Resolve the requested JVM explicitly; do not rely on update-alternatives.
-        candidates=list(pathlib.Path('/usr/lib/jvm').glob('java-'+str(java)+'-openjdk-*/bin/java'))
+        candidates=list(JVMS.glob('java-'+str(java)+'-openjdk-*/bin/java'))
         if len(candidates)!=1: raise ValueError('unable to locate requested Java runtime')
-        service='[Unit]\nDescription=MineCManager '+sid+'\nAfter=network-online.target\n[Service]\nUser=mcm-game\nGroup=mcm-game\nWorkingDirectory='+str(root)+'\nExecStart='+str(candidates[0])+' -Xms512M -Xmx'+str(ram)+'M -jar server.jar nogui\nRestart=on-failure\nTimeoutStopSec=180\nKillSignal=SIGINT\nSuccessExitStatus=0 130 143\nUMask=0027\nNoNewPrivileges=true\nProtectSystem=strict\nReadWritePaths='+str(root)+'\nProtectHome=true\nPrivateTmp=true\n[Install]\nWantedBy=multi-user.target\n'
-        atomic('/etc/systemd/system/'+unit(sid),service.encode(),0o644)
+        service='[Unit]\nDescription=MineCManager '+sid+'\nAfter=network-online.target\n[Service]\nUser=mcm-game\nGroup='+str(account.pw_gid)+'\nWorkingDirectory='+str(root)+'\nExecStart='+str(candidates[0])+' -Xms512M -Xmx'+str(ram)+'M -jar server.jar nogui\nRestart=on-failure\nTimeoutStopSec=180\nKillSignal=SIGINT\nSuccessExitStatus=0 130 143\nUMask=0027\nNoNewPrivileges=true\nProtectSystem=strict\nReadWritePaths='+str(root)+'\nProtectHome=true\nPrivateTmp=true\n[Install]\nWantedBy=multi-user.target\n'
+        atomic(UNITS/unit(sid),service.encode(),0o644)
         record=dict(server=sid,platform=q['platform'],version=q['version'],build=build,java=java,port=port,ram_mb=ram,path=str(root),sha256=hashlib.sha256((root/'server.jar').read_bytes()).hexdigest())
         atomic(STATE/'servers'/(sid+'.json'),json.dumps(record).encode())
         run('systemctl','daemon-reload');run('systemctl','enable','--now',unit(sid))

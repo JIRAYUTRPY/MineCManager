@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Exercise the shipped remote program in isolated directories; never mutate the host OS."""
-import base64, importlib.util, json, pathlib, pwd, tempfile, unittest
+import base64, importlib.util, json, pathlib, pwd, tempfile, unittest, io, zipfile, hashlib
 from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('remote',ROOT/'internal/fleet/remote.py');remote=importlib.util.module_from_spec(spec);spec.loader.exec_module(remote)
@@ -39,6 +39,18 @@ class RemoteTests(unittest.TestCase):
  def test_invalid_deploy_has_no_os_side_effects(self):
   with patch.object(remote,'run') as run,self.assertRaises(ValueError):remote.deploy({'server':'bad;id','port':25565,'ram_mb':2048,'eula':True})
   run.assert_not_called()
+ def test_deploy_writes_systemd_and_metadata_without_shell_interpolation(self):
+  units=self.base/'units';units.mkdir();jvms=self.base/'jvms';java=jvms/'java-21-openjdk-amd64'/'bin';java.mkdir(parents=True);(java/'java').touch()
+  jar=io.BytesIO()
+  with zipfile.ZipFile(jar,'w') as z:z.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\n')
+  payload=jar.getvalue();calls=[];original_read=pathlib.Path.read_text
+  def read_text(path,*a,**k):
+   if str(path)=='/etc/os-release':return 'ID=ubuntu\n'
+   return original_read(path,*a,**k)
+  with patch.object(remote,'UNITS',units),patch.object(remote,'JVMS',jvms),patch.object(remote,'metrics',return_value={'ram_total':8<<30}),patch.object(remote,'resolve',return_value=('https://official.invalid/server.jar',hashlib.sha256(payload).hexdigest(),'sha256',21,'1')),patch.object(remote.urllib.request,'urlopen',return_value=io.BytesIO(payload)),patch.object(remote,'run',side_effect=lambda *a,**k:calls.append(a)),patch.object(remote.pwd,'getpwnam',return_value=pwd.getpwuid(remote.os.getuid())),patch.object(remote.os,'chown'),patch.object(pathlib.Path,'read_text',read_text):
+   result=remote.deploy({'server':'survival','platform':'paper','version':'1.21.11','port':25565,'ram_mb':2048,'eula':True})
+  self.assertEqual(result['java'],21);self.assertEqual((remote.BASE/'survival'/'server.jar').read_bytes(),payload)
+  self.assertIn('-Xmx2048M', (units/'mcm-survival.service').read_text());self.assertEqual(calls[-1],('systemctl','enable','--now','mcm-survival.service'))
  def test_command_output_limit(self):
   with self.assertRaisesRegex(ValueError,'output exceeds'):remote.run('python3','-c','print("x"*1100000)')
  def test_explicit_root_confirmation(self):

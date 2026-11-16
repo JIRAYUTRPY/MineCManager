@@ -203,3 +203,16 @@ func TestR2PresignDoesNotLeakAccountSecret(t *testing.T) {
 		t.Fatal("unexpected signed upload URL", u)
 	}
 }
+
+func TestSchedulesRespectQueueCapacity(t *testing.T) {
+	s, r := fixture(t)
+	for i := 0; i < 105; i++ {
+		id := newID()
+		s.Store.data.Hosts[id] = Host{ID: id}
+		s.Store.data.Schedules[id] = Schedule{ID: id, Host: id, Server: "survival", Enabled: true, EveryHours: 24, Retain: 7, Actor: "admin", Next: time.Now().Add(-time.Hour)}
+	}
+	s.tick(context.Background())
+	if len(s.Store.data.Jobs) != 100 || r.calls != 1 {
+		t.Fatalf("jobs=%d calls=%d", len(s.Store.data.Jobs), r.calls)
+	}
+}
