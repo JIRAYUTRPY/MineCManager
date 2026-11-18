@@ -157,3 +157,12 @@ func (s *Store) save() error {
 }
 func publicHost(h Host) Host { h.Password = ""; h.PrivateKey = ""; return h }
 func publicJob(j Job) Job    { j.Input = nil; return j }
+
+func (s *state) hostBusy(id string) bool {
+	for _, job := range s.Jobs {
+		if job.Host == id && (job.Status == "queued" || job.Status == "running") {
+			return true
+		}
+	}
+	return false
+}

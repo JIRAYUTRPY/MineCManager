@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"net"
@@ -77,7 +78,7 @@ func TestSSHHostPinningAndInputFraming(t *testing.T) {
 		t.Fatal("bad input frame", input)
 	}
 	h.Fingerprint = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-	if _, e = (SSHRunner{}).Run(ctx, h, map[string]any{"action": "metrics"}); e == nil {
-		t.Fatal("host key mismatch accepted")
+	if _, e = (SSHRunner{}).Run(ctx, h, map[string]any{"action": "metrics"}); !errors.Is(e, errHostKeyMismatch) {
+		t.Fatalf("host key mismatch was not identified: %v", e)
 	}
 }

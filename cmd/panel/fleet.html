@@ -2,7 +2,7 @@
 <style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#101113;color:#eee;font:15px system-ui}main{max-width:1160px;margin:auto;padding:24px}h1{font-size:30px}h2{font-size:20px}small,p{color:#aaa}a{color:#ddd}section{border:1px solid #383a40;border-radius:14px;padding:22px;margin:18px 0}label{display:block;margin:10px 0}input,select,textarea,button{font:inherit;background:#1d1f23;color:#eee;border:1px solid #555;border-radius:7px;padding:10px;max-width:100%}input,select{width:100%}input[type=checkbox]{width:auto}button{cursor:pointer;margin:6px 6px 6px 0;background:#eee;color:#111}textarea{width:100%;min-height:110px;font-family:monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:440px;overflow:auto}nav{display:flex;gap:18px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.badge{border:1px solid #555;padding:14px;border-radius:9px}.warn{color:#e9c58f}#message{position:sticky;top:0;background:#26282d;padding:14px;z-index:2;border-radius:8px}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:10px;border-bottom:1px solid #333;overflow-wrap:anywhere}.scroll{overflow:auto}details{margin:15px 0}</style>
 <main><h1>MineCManager <small>Infrastructure Panel</small></h1><p>เพิ่มเครื่อง ติดตั้ง Minecraft และดูแลระบบจากจุดเดียว</p><nav><a href="#hosts">เครื่อง VM</a><a href="#minecraft">Minecraft</a><a href="#files">Files / OS</a><a href="#cloud">Cloudflare</a><a href="#backup">Backup</a><a href="#jobs">งานล่าสุด</a><a href="/">Agent / Keys / Audit</a></nav>
 <section><label>Admin API key <input id="key" type="password" autocomplete="off" placeholder="ต้องมีสิทธิ์ admin:fleet"></label><button id="connect">เชื่อมต่อ</button><button id="logout">ออกจากระบบ</button><small>Key ใช้ในหน้านี้เท่านั้น ไม่มีการบันทึกใน browser storage</small></section><div id="message" role="status">พร้อมเชื่อมต่อ</div>
-<section id="hosts"><h2>เครื่อง VM</h2><label>เลือกเครื่อง <select id="host"></select></label><button id="metrics">อ่าน CPU / RAM / Disk</button><button id="hostServers">รายการ Minecraft</button><div id="metricsView" class="grid"></div><details><summary>เพิ่ม / เปลี่ยนข้อมูล VM</summary><div class="grid"><label>ID <input id="hostID" placeholder="game-01"></label><label>Public IP <input id="publicIP"></label><label>Private IP <input id="privateIP"></label><label>IP ที่ Panel ใช้เชื่อมต่อ <input id="address" placeholder="เลือก IP ที่ Panel เข้าถึงได้"></label><label>SSH port <input id="port" type="number" value="22"></label><label>SSH user <input id="user" value="root"></label></div><button id="discover">อ่าน SSH fingerprint</button><label>Host fingerprint <input id="fingerprint" placeholder="SHA256:..."></label><p>เทียบ fingerprint กับ console ของผู้ให้บริการ VM ก่อนบันทึก: <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256</code></p><label><input id="trust" type="checkbox"> ตรวจสอบ fingerprint ของ VM นี้แล้ว</label><label>SSH password (ใช้กับ sudo ได้ด้วย) <input id="password" type="password" autocomplete="new-password"></label><label>หรือ SSH private key (ไม่มี passphrase) <textarea id="privateKey" spellcheck="false"></textarea></label><p>VM ต้องมี Python 3 และ user ต้องเป็น root หรือมี sudo บนเครื่องนั้น Credentials จะถูกเข้ารหัสก่อนบันทึก</p><button id="addHost">บันทึก + ทดสอบเครื่อง</button><button id="replaceHost">เปลี่ยน credentials / fingerprint</button><button id="deleteHost">นำเครื่องออกจาก Panel</button></details></section>
+<section id="hosts"><h2>เครื่อง VM</h2><label>เลือกเครื่อง <select id="host"></select></label><button id="metrics">อ่าน CPU / RAM / Disk</button><button id="hostServers">รายการ Minecraft</button><div id="metricsView" class="grid"></div><details><summary>เพิ่ม / เปลี่ยนข้อมูล VM</summary><div class="grid"><label>ID <input id="hostID" placeholder="game-01"></label><label>Public IP <input id="publicIP"></label><label>Private IP <input id="privateIP"></label><label>IP ที่ Panel ใช้เชื่อมต่อ <input id="address" placeholder="เลือก IP ที่ Panel เข้าถึงได้"></label><label>SSH port <input id="port" type="number" value="22"></label><label>SSH user <input id="user" value="root"></label></div><button id="discover">อ่าน SSH fingerprint</button><label>Host fingerprint <input id="fingerprint" placeholder="SHA256:..."></label><p>เทียบ fingerprint กับ console ของผู้ให้บริการ VM ก่อนบันทึก: <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256</code></p><label><input id="trust" type="checkbox"> ตรวจสอบ fingerprint ของ VM นี้แล้ว</label><label>SSH password (ใช้กับ sudo ได้ด้วย) <input id="password" type="password" autocomplete="new-password"></label><label>หรือ SSH private key (ไม่มี passphrase) <textarea id="privateKey" spellcheck="false"></textarea></label><p>VM ต้องมี Python 3 และ user ต้องเป็น root หรือมี sudo บนเครื่องนั้น Credentials จะถูกเข้ารหัสก่อนบันทึก</p><button id="testHost">ทดสอบการเชื่อมต่อ</button><button id="addHost">ตรวจสอบและบันทึก VM</button><button id="replaceHost">เปลี่ยน credentials / fingerprint</button><button id="deleteHost">นำเครื่องออกจาก Panel</button></details></section>
 <section id="minecraft"><h2>ติดตั้ง Minecraft</h2><div class="grid"><label>Server ID <input id="serverID" value="survival"></label><label>Platform <select id="platform"><option value="paper">Paper</option><option value="purpur">Purpur</option><option value="fabric">Fabric</option><option value="vanilla">Vanilla</option></select></label><label>Minecraft release <input id="version" placeholder="เช่น 1.21.11"></label><label>RAM (MiB) <input id="ram" type="number" value="2048"></label><label>Game port <input id="gamePort" type="number" value="25565"></label></div><p>ติดตั้งใน /srv/minecmanager/&lt;server-id&gt; • เลือก Java อัตโนมัติ • ไม่เขียนทับ server เดิม</p><label><input id="eula" type="checkbox"> ฉันอ่านและยอมรับ <a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">Minecraft EULA</a></label><button id="deploy">ติดตั้งบน VM ที่เลือก</button><p>หลังติดตั้งตรวจ logs ว่ามี “Done” แล้วเปิด TCP game port ใน firewall ของ VM/Cloud ก่อนเชื่อมต่อ</p><div class="grid"><label>Service <input id="service" value="mcm-survival.service"></label></div><button data-verb="status">สถานะ</button><button data-verb="start">เริ่ม</button><button data-verb="stop">หยุด</button><button data-verb="restart">รีสตาร์ต</button><button data-verb="logs">Logs</button></section>
 <section id="files"><h2>Files / OS administrator</h2><p class="warn">สิทธิ์ส่วนนี้ควบคุมเครื่องระดับ root รวมถึงไฟล์ระบบและ services ใช้เฉพาะผู้ดูแล infrastructure</p><label>Absolute path <input id="path" value="/srv/minecmanager"></label><button id="listFiles">เปิด directory</button><button id="readFile">อ่านไฟล์ (ไม่เกิน 1 MiB)</button><textarea id="fileContent" spellcheck="false" aria-label="File content"></textarea><button id="saveFile">บันทึก + เก็บสำเนาเดิม</button><p>Editor ตรวจ SHA-256 ป้องกันเขียนทับไฟล์ที่เปลี่ยนไปแล้ว การบันทึกไฟล์ระบบไม่ได้ตรวจ syntax หรือ restart service ให้อัตโนมัติ</p><details><summary>OS command console</summary><p>ใช้จัดการ packages, processes, firewall, permissions และงานไฟล์อื่น ๆ คำสั่งทำงานแบบ non-interactive จำกัด 120 วินาที ระวังการปิด SSH หรือเครือข่ายที่ Panel ใช้อยู่</p><textarea id="command" spellcheck="false" placeholder="df -h; free -m; ps aux"></textarea><button id="runCommand">รันคำสั่งระดับ root</button></details></section>
 <section id="cloud"><h2>Cloudflare DNS / R2</h2><details><summary>ตั้งค่าการเชื่อมต่อ</summary><label>DNS API token <input id="cfToken" type="password" autocomplete="new-password"></label><div class="grid"><label>R2 account ID <input id="account"></label><label>Bucket <input id="bucket"></label><label>S3 Access Key ID <input id="accessKey" type="password"></label><label>S3 Secret Access Key <input id="secretKey" type="password"></label></div><p>ใช้ DNS token ที่มี Zone Read / DNS Edit และ R2 credentials ของ bucket สำหรับ Object Read & Write เว้นช่อง secret ว่างเพื่อใช้ค่าเดิม</p><button id="saveCloud">บันทึก Cloudflare</button><button id="cloudStatus">ตรวจการตั้งค่า</button></details><button id="zones">ดู Zones</button><div class="grid"><label>Zone ID <input id="zone"></label><label>Hostname <input id="dnsName" placeholder="mc.example.com"></label><label>Type <select id="dnsType"><option>A</option><option>AAAA</option><option>CNAME</option><option>SRV</option></select></label><label>IP / Target <input id="dnsContent"></label><label>Record ID (ว่าง = สร้างใหม่) <input id="recordID"></label></div><label>SRV data (JSON เฉพาะ type SRV) <textarea id="srv">{"priority":0,"weight":0,"port":25565,"target":"mc.example.com"}</textarea></label><label><input id="webProxy" type="checkbox"> Hostname นี้ใช้เว็บ HTTP/HTTPS และต้องการ Cloudflare proxy</label><button id="saveDNS">สร้าง / อัปเดต DNS</button><p>Minecraft ใช้ DNS only การสร้าง DNS ไม่ได้เปิด port, ติดตั้ง TLS หรือ proxy TCP ของเกม</p></section>
@@ -16,11 +16,75 @@ const run=f=>async()=>{try{$('message').textContent='กำลังทำงา
 async function hosts(){const rows=await api('hosts');$('host').replaceChildren(...rows.map(h=>{const o=document.createElement('option');o.value=h.id;o.textContent=h.id+' · '+h.address;return o}))}
 async function jobs(){const rows=await api('jobs');$('jobRows').replaceChildren(...rows.map(j=>{const tr=document.createElement('tr');for(const value of [(j.host||'Cloudflare')+' / '+j.action,j.status,new Date(j.created).toLocaleString()]){const td=document.createElement('td');td.textContent=value;tr.append(td)}const td=document.createElement('td'),b=document.createElement('button');b.textContent='ดู';b.onclick=()=>show(j);td.append(b);tr.append(td);return tr}))}
 async function job(action,input={},wait=false){const cloud=['dns','r2-list','r2-download'].includes(action);if(!cloud&&!v('host'))throw Error('เลือก VM ก่อน');const j=await api('jobs','POST',{host:cloud?'':v('host'),action,input});show(j);await jobs();if(!wait)return j;for(let i=0;i<90;i++){await new Promise(r=>setTimeout(r,1000));const s=await api('jobs/'+j.id);if(s.status==='succeeded'){show(s.result);await jobs();return s.result}if(['failed','interrupted'].includes(s.status))throw Error(s.error)}throw Error('งานยังทำอยู่ ดูสถานะในรายการงาน')}
-bind('connect',async()=>{await hosts();await jobs();clearInterval(pollTimer);pollTimer=setInterval(()=>{if(v('key'))jobs().catch(()=>{})},5000)});bind('logout',()=>{clearInterval(pollTimer);$('key').value='';$('password').value='';$('privateKey').value='';$('cfToken').value='';$('accessKey').value='';$('secretKey').value='';$('host').replaceChildren();$('jobRows').replaceChildren();$('fileContent').value='';fileHash='';show('ออกจากระบบแล้ว')});
-bind('discover',async()=>{const x=await api('discover','POST',{address:v('address'),port:Number(v('port'))});$('fingerprint').value=x.fingerprint;$('trust').checked=false;show(x)});
-async function saveHost(method){if(!$('trust').checked)throw Error('ตรวจสอบ host fingerprint ก่อน');const id=v('hostID');await api('hosts',method,{id,public_ip:v('publicIP'),private_ip:v('privateIP'),address:v('address'),port:Number(v('port')),user:v('user'),fingerprint:v('fingerprint'),password:$('password').value,private_key:$('privateKey').value});$('password').value='';$('privateKey').value='';await hosts();$('host').value=id;await displayMetrics()}
-bind('addHost',()=>saveHost('POST'));bind('replaceHost',()=>{if(confirm('แทนที่ credentials / fingerprint ของเครื่องนี้?'))return saveHost('PUT')});bind('deleteHost',async()=>{if(confirm('นำ '+v('host')+' ออกจาก Panel? ไม่ลบข้อมูลบน VM')){await api('hosts/'+v('host'),'DELETE');await hosts()}});
-async function displayMetrics(){const m=await job('metrics',{},true);$('metricsView').replaceChildren(...[['CPU',m.cpu_count+' cores · '+m.cpu_percent+'%'],['RAM',((m.ram_total-m.ram_available)/2**30).toFixed(1)+' / '+(m.ram_total/2**30).toFixed(1)+' GiB'],['Disk',((m.disk_total-m.disk_free)/2**30).toFixed(1)+' / '+(m.disk_total/2**30).toFixed(1)+' GiB'],['Uptime',(m.uptime_seconds/3600).toFixed(1)+' h']].map(([title,value])=>{const d=document.createElement('div');d.className='badge';d.textContent=title+': '+value;return d}))}
+bind('connect',async()=>{await hosts();await jobs();clearInterval(pollTimer);pollTimer=setInterval(()=>{if(v('key'))jobs().catch(()=>{})},5000)});bind('logout',()=>{clearInterval(pollTimer);$('key').value='';$('password').value='';$('privateKey').value='';$('cfToken').value='';$('accessKey').value='';$('secretKey').value='';$('host').replaceChildren();$('jobRows').replaceChildren();$('fileContent').value='';fileHash='';$('metricsView').replaceChildren();$('trust').checked=false;show('ออกจากระบบแล้ว')});
+for (const field of ['address', 'port', 'fingerprint']) {
+  $(field).addEventListener('input', () => { $('trust').checked = false; });
+}
+bind('discover', async () => {
+  const address = v('address'), port = Number(v('port'));
+  $('trust').checked = false;
+  const result = await api('discover', 'POST', {address, port});
+  if (address !== v('address') || port !== Number(v('port'))) return;
+  $('fingerprint').value = result.fingerprint;
+  $('trust').checked = false;
+  show(result.fingerprint);
+});
+
+function hostInput() {
+  if (!$('trust').checked) throw Error('ตรวจสอบ SSH fingerprint กับ VM console ก่อน');
+  return {
+    id: v('hostID'), public_ip: v('publicIP'), private_ip: v('privateIP'),
+    address: v('address'), port: Number(v('port')), user: v('user'),
+    fingerprint: v('fingerprint'), password: $('password').value, private_key: $('privateKey').value
+  };
+}
+bind('testHost', async () => {
+  const input = hostInput();
+  const result = await api('hosts/test', 'POST', input);
+  show({vm: result.id, address: result.address, metrics: result.metrics});
+});
+async function saveHost(method) {
+  const input = hostInput();
+  const result = await api('hosts', method, input);
+  $('password').value = '';
+  $('privateKey').value = '';
+  await hosts();
+  $('host').value = result.id;
+  renderMetrics(result.metrics);
+  show({vm: result.id, address: result.address, metrics: result.metrics});
+}
+bind('addHost', () => saveHost('POST'));
+bind('replaceHost', () => {
+  if (confirm('เปลี่ยนข้อมูลการเชื่อมต่อของ ' + v('hostID') + '?')) return saveHost('PUT');
+});
+bind('deleteHost', async () => {
+  if (confirm('นำ ' + v('host') + ' ออกจาก Panel?')) {
+    await api('hosts/' + v('host'), 'DELETE');
+    await hosts();
+    $('metricsView').replaceChildren();
+  }
+});
+$('host').addEventListener('change', () => $('metricsView').replaceChildren());
+function renderMetrics(m) {
+  const usedGiB = (total, available) => ((total - available) / 2**30).toFixed(1) + ' / ' + (total / 2**30).toFixed(1) + ' GiB';
+  const rows = [
+    ['CPU', m.cpu_count + ' cores · ' + m.cpu_percent + '%'],
+    ['RAM', usedGiB(m.ram_total, m.ram_available)],
+    ['Disk', usedGiB(m.disk_total, m.disk_free)],
+    ['Uptime', (m.uptime_seconds / 3600).toFixed(1) + ' h']
+  ];
+  $('metricsView').replaceChildren(...rows.map(([title, value]) => {
+    const card = document.createElement('div');
+    card.className = 'badge';
+    card.textContent = title + ': ' + value;
+    return card;
+  }));
+}
+async function displayMetrics() {
+  const id = v('host');
+  const result = await job('metrics', {}, true);
+  if (id === v('host')) renderMetrics(result);
+}
 bind('metrics',displayMetrics);bind('hostServers',()=>job('servers',{},true));bind('deploy',()=>{if(!$('eula').checked)throw Error('ต้องยอมรับ EULA');if(confirm('ติดตั้ง Minecraft บน '+v('host')+'?'))return job('deploy',{server:v('serverID'),platform:v('platform'),version:v('version'),ram_mb:Number(v('ram')),port:Number(v('gamePort')),eula:true})});document.querySelectorAll('[data-verb]').forEach(b=>b.onclick=run(()=>{const verb=b.dataset.verb;if(!['logs','status'].includes(verb)&&!confirm(verb+' '+v('service')+'?'))return;return job('service',{service:v('service'),verb,confirm:v('service')},true)}));
 bind('listFiles',()=>job('files',{path:v('path')},true));bind('readFile',async()=>{const target=v('host')+':'+v('path');const x=await job('read',{path:v('path')},true);$('fileContent').value=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(x.content),c=>c.charCodeAt(0)));fileHash=x.sha256;fileTarget=target});bind('saveFile',async()=>{if(!fileHash||fileTarget!==v('host')+':'+v('path'))throw Error('อ่านไฟล์นี้ก่อน');if(!confirm('บันทึก '+v('path')+'?'))return;let str='';for(const b of new TextEncoder().encode($('fileContent').value))str+=String.fromCharCode(b);const x=await job('write',{path:v('path'),confirm:v('path'),sha256:fileHash,content:btoa(str)},true);fileHash=x.sha256});bind('runCommand',()=>{if(prompt('คำสั่งนี้รันระดับ root บน '+v('host')+' พิมพ์ ROOT เพื่อยืนยัน')==='ROOT')return job('command',{command:$('command').value,confirm:'ROOT'},true)});
 bind('saveCloud',async()=>{await api('cloud','PUT',{token:v('cfToken'),account:v('account'),bucket:v('bucket'),access_key:v('accessKey'),secret_key:v('secretKey')});for(const id of ['cfToken','accessKey','secretKey'])$(id).value='';show(await api('cloud'))});bind('cloudStatus',async()=>show(await api('cloud')));bind('zones',async()=>show(await api('zones')));bind('saveDNS',()=>{if(!confirm('เปลี่ยน Cloudflare DNS ของ '+v('dnsName')+'?'))return;return job('dns',{zone:v('zone'),name:v('dnsName'),type:v('dnsType'),content:v('dnsContent'),record_id:v('recordID'),web:$('webProxy').checked,...(v('dnsType')==='SRV'?{data:JSON.parse($('srv').value)}:{})},true)});

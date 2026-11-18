@@ -3,6 +3,7 @@ package fleet
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -60,7 +61,9 @@ func validHost(h Host) error {
 			return errors.New("invalid public/private IP")
 		}
 	}
-	if !strings.HasPrefix(h.Fingerprint, "SHA256:") || len(h.Fingerprint) != 50 {
+	fingerprint, hasPrefix := strings.CutPrefix(h.Fingerprint, "SHA256:")
+	digest, err := base64.RawStdEncoding.Strict().DecodeString(fingerprint)
+	if !hasPrefix || len(fingerprint) != 43 || err != nil || len(digest) != 32 {
 		return errors.New("confirmed SHA256 SSH host fingerprint required")
 	}
 	if h.Password == "" && h.PrivateKey == "" {
@@ -73,6 +76,10 @@ func validHost(h Host) error {
 }
 func (s *Service) Handle(w http.ResponseWriter, r *http.Request, actor string) {
 	path := strings.TrimPrefix(r.URL.Path, "/v1/fleet/")
+	if path == "hosts" && (r.Method == http.MethodPost || r.Method == http.MethodPut) || path == "hosts/test" && r.Method == http.MethodPost {
+		s.enrollHost(w, r, actor, path == "hosts/test")
+		return
+	}
 	if e := s.Audit(actor, "", r.Method+" fleet/"+path, "intent", 0); e != nil {
 		http.Error(w, "audit unavailable", 503)
 		return
@@ -124,32 +131,11 @@ func (s *Service) Handle(w http.ResponseWriter, r *http.Request, actor string) {
 			out = append(out, publicHost(h))
 		}
 		result = out
-	case path == "hosts" && (r.Method == "POST" || r.Method == "PUT"):
-		var h Host
-		if decode(w, r, &h) != nil {
-			http.Error(w, "invalid host request", 400)
-			return
-		}
-		if e := validHost(h); e != nil {
-			http.Error(w, e.Error(), 400)
-			return
-		}
-		_, exists := s.Store.data.Hosts[h.ID]
-		if exists && r.Method == "POST" {
-			http.Error(w, "host ID exists; PUT explicitly replaces credentials", 409)
-			return
-		}
-		s.Store.data.Hosts[h.ID] = h
-		result = publicHost(h)
-		mutate = true
-		status = 201
 	case strings.HasPrefix(path, "hosts/") && r.Method == "DELETE":
 		id := strings.TrimPrefix(path, "hosts/")
-		for _, j := range s.Store.data.Jobs {
-			if j.Host == id && (j.Status == "queued" || j.Status == "running") {
-				http.Error(w, "host has pending jobs", 409)
-				return
-			}
+		if s.Store.data.hostBusy(id) {
+			http.Error(w, "host has pending jobs", 409)
+			return
 		}
 		delete(s.Store.data.Hosts, id)
 		for k, sc := range s.Store.data.Schedules {
@@ -324,14 +310,7 @@ func (s *Service) tick(ctx context.Context) {
 			s.Store.data.Schedules[id] = sc
 			continue
 		}
-		busy := false
-		for _, j := range s.Store.data.Jobs {
-			if j.Host == sc.Host && (j.Status == "queued" || j.Status == "running") {
-				busy = true
-				break
-			}
-		}
-		if busy || pending >= 100 {
+		if pending >= 100 || s.Store.data.hostBusy(sc.Host) {
 			continue
 		}
 		pending++
