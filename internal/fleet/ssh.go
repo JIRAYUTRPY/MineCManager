@@ -7,7 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
+
 	"io"
 	"net"
 	"strconv"
@@ -24,22 +24,30 @@ type Runner interface {
 	Run(context.Context, Host, map[string]any) (json.RawMessage, error)
 }
 type SSHRunner struct{}
+
+var (
+	errSSHNetwork      = errors.New("SSH network connection failed; check the selected IP and port")
+	errPrivateKey      = errors.New("invalid SSH private key; an unencrypted key is required")
+	errHostKeyMismatch = errors.New("SSH host fingerprint mismatch; verify the host key in the VM console")
+	errSSHHandshake    = errors.New("SSH authentication or negotiation failed; check the user, credentials and SSH settings")
+)
+
 type boundedBuffer struct {
-	bytes.Buffer
-	max int
+	data bytes.Buffer
+	max  int
 }
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
-	if b.Len()+len(p) > b.max {
+	if b.data.Len()+len(p) > b.max {
 		return 0, errors.New("remote output exceeds limit")
 	}
-	return b.Buffer.Write(p)
+	return b.data.Write(p)
 }
 func dial(ctx context.Context, h Host, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 	d := net.Dialer{Timeout: 10 * time.Second}
 	c, e := d.DialContext(ctx, "tcp", net.JoinHostPort(h.Address, strconv.Itoa(h.Port)))
 	if e != nil {
-		return nil, errors.New("SSH network connection failed")
+		return nil, errSSHNetwork
 	}
 	_ = c.SetDeadline(time.Now().Add(20 * time.Second))
 	conn, ch, req, e := ssh.NewClientConn(c, net.JoinHostPort(h.Address, strconv.Itoa(h.Port)), cfg)
@@ -71,7 +79,7 @@ func (SSHRunner) Run(ctx context.Context, h Host, input map[string]any) (json.Ra
 	if h.PrivateKey != "" {
 		k, e := ssh.ParsePrivateKey([]byte(h.PrivateKey))
 		if e != nil {
-			return nil, errors.New("invalid private key (encrypted keys are not supported)")
+			return nil, errPrivateKey
 		}
 		auth = append(auth, ssh.PublicKeys(k))
 	}
@@ -80,12 +88,15 @@ func (SSHRunner) Run(ctx context.Context, h Host, input map[string]any) (json.Ra
 	}
 	c, e := dial(ctx, h, &ssh.ClientConfig{User: h.User, Auth: auth, HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
 		if ssh.FingerprintSHA256(k) != h.Fingerprint {
-			return errors.New("SSH host key mismatch")
+			return errHostKeyMismatch
 		}
 		return nil
 	}})
 	if e != nil {
-		return nil, fmt.Errorf("SSH authentication/host verification failed: %w", e)
+		if errors.Is(e, errHostKeyMismatch) || errors.Is(e, errSSHNetwork) {
+			return nil, e
+		}
+		return nil, errSSHHandshake
 	}
 	defer c.Close()
 	done := make(chan struct{})
@@ -124,7 +135,7 @@ func (SSHRunner) Run(ctx context.Context, h Host, input map[string]any) (json.Ra
 	if e = session.Run(command); e != nil {
 		return nil, errors.New("remote operation failed: verify Python 3, sudo rights, OS and connectivity; inspect VM state before retry")
 	}
-	result := bytes.TrimSpace(out.Bytes())
+	result := bytes.TrimSpace(out.data.Bytes())
 	if !json.Valid(result) {
 		return nil, errors.New("invalid remote response")
 	}

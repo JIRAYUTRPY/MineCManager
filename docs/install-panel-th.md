@@ -9,8 +9,6 @@
 ```bash
 git clone https://github.com/JIRAYUTRPY/MineCManager.git
 cd MineCManager
-# ก่อน PR นี้ merge ให้ checkout branch นี้; หลัง merge ใช้ main ได้
- git switch feat/panel-vm-provisioning
 docker compose up -d --build
 docker compose logs --tail=50 panel
 docker compose exec panel cat /data/admin-key.txt
@@ -46,8 +44,10 @@ Compose เปิด HTTP เฉพาะ loopback โดยตั้งใจ �
 1. เปิด **เครื่อง VM → เพิ่ม / เปลี่ยนข้อมูล VM**
 2. กรอก IP และ port แล้วกด **อ่าน SSH fingerprint** การอ่านนี้ยังไม่ส่ง password และยังไม่ถือว่าเชื่อถือเครื่อง
 3. เทียบกับผล `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256` จาก provider console (ถ้า SSH เลือก key algorithm อื่น ให้เทียบ public key ของ algorithm นั้น)
-4. ใส่ credentials แล้วติ๊กยืนยัน fingerprint กด **บันทึก + ทดสอบเครื่อง**
-5. Panel บันทึก credentials แบบ AES-256-GCM และอ่าน CPU utilization/core count, RAM total/available, disk total/free ของ `/`, uptime และ OS ผ่าน SSH
+4. ใส่ password หรือ private key ติ๊กยืนยัน fingerprint แล้วกด **ทดสอบการเชื่อมต่อ** เพื่อดู CPU, RAM, disk ของ `/`, uptime และ OS ข้อมูลเครื่องจะยังอยู่เฉพาะในฟอร์ม
+5. กด **ตรวจสอบและบันทึก VM** ได้ทันทีเมื่อพร้อม Panel ตรวจ fingerprint, credentials และสิทธิ์อ่าน metrics ผ่าน root/sudo อีกครั้ง เมื่อผ่านจึงเก็บข้อมูลแบบ AES-256-GCM และแสดงทรัพยากรของเครื่อง
+
+หากเปลี่ยน credentials แล้วทดสอบไม่ผ่าน ข้อมูลเดิมยังใช้ได้ การแก้ IP, port หรือ fingerprint ในฟอร์มต้องยืนยัน fingerprint ใหม่ หากมีงานค้างสำหรับ VM นั้น ให้รอจบก่อนเปลี่ยนปลายทาง SSH
 
 User ที่ใช้ key อย่างเดียวต้องมี `sudo -n` ได้ หากใช้ password จะใช้ password เดียวกันกับ sudo ไม่รองรับ MFA, keyboard-interactive หรือ sudo password คนละชุด ต้องเปิด SSH จากเครื่อง Panel และมีเส้นทาง private network/VPN เองหากเลือก private IP
 
@@ -159,13 +159,13 @@ docker compose logs --tail=50 panel
 |---|---|
 | 403 admin:fleet required | สร้าง key ใหม่ที่มี scope นี้; Agent admin:nodes ไม่เพียงพอ |
 | SSH network connection failed | selected IP, route จาก container, SSH port, security group/firewall |
-| SSH authentication/host verification failed | fingerprint, user, key/password และ SSH policy |
-| remote operation failed | Python 3, sudo rights, OS, connectivity; stderr ไม่แสดงเพื่อป้องกัน secrets หลุด |
-| host key mismatch | เทียบกับ provider console ห้ามยอมรับเพียงเพราะ IP ตรง |
+| SSH authentication or negotiation failed | user, key/password และวิธี authentication ที่ sshd รองรับ |
+| could not read VM metrics / remote operation failed | Python 3, sudo rights, OS, connectivity; stderr ไม่แสดงเพื่อป้องกัน secrets หลุด |
+| SSH host fingerprint mismatch | เทียบกับ provider console ห้ามยอมรับเพียงเพราะ IP ตรง |
 | apt-get failed | apt lock, repository/network และ package Java major ที่ต้องการ |
 | งาน interrupted/failed แต่ไฟล์มีแล้ว | ตรวจ VM จริงก่อน retry ไม่ลบ partial installation โดยไม่สำรอง |
 | R2 upload failed | bucket credential scope, VM outbound HTTPS, object size/timeout; local backup ยังอยู่ |
 | vault authentication failed | ต้องใช้ vault.key เดิมกับ vault ชุดเดียวกัน ไม่ regenerate |
 | audit unavailable | พื้นที่/permissions/JSONL corruption แก้แล้ว restart; อย่าข้าม audit |
 
-ก่อน production ให้ทดสอบ VM disposable: เพิ่ม VM, deploy platform/version ที่จะใช้จริง, เข้าเกม, restart, แก้ไฟล์, backup/local restore, R2 backup/restore, schedule, revoke key และ restart Panel ระหว่าง job การทดสอบอัตโนมัติใน PR ใช้ SSH server/remote boundaries จำลองและ filesystem ชั่วคราว **ไม่ได้แทนการทดสอบกับ Ubuntu VM, Minecraft client, Cloudflare account และ R2 bucket ของคุณจริง**
+ก่อน production ให้ทดสอบ VM disposable: เพิ่ม VM, deploy platform/version ที่จะใช้จริง, เข้าเกม, restart, แก้ไฟล์, backup/local restore, R2 backup/restore, schedule, revoke key และ restart Panel ระหว่าง job CI ทดสอบจากหน้าเว็บถึง OpenSSH และ systemd บน Ubuntu 24.04 ของ GitHub โดยใช้ service ทดสอบและไฟล์ตัวอย่างสำหรับ backup/restore ส่วนการเข้าเกมและการกู้ข้อมูลจาก R2 ของคุณต้องทดสอบกับ server, บัญชี Cloudflare และ bucket ที่จะใช้จริง

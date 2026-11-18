@@ -22,7 +22,7 @@ jobs:
       - run: docker compose config --quiet
       - run: test -z "$(gofmt -l cmd internal)"
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -35,6 +35,9 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: MCM_UI_TEST=1 python3 scripts/smoke-test.py
       - run: MCM_FLEET_UI_TEST=1 go test -v ./cmd/panel -run TestFleetBrowser -count=1
+      - name: Verify Fleet enrollment and restore on Ubuntu using OpenSSH and systemd
+        timeout-minutes: 6
+        run: bash scripts/fleet-ubuntu-acceptance.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

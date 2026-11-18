@@ -23,18 +23,29 @@ class RemoteTests(unittest.TestCase):
   root=remote.BASE/'survival';root.mkdir();(root/'world').mkdir();(root/'world'/'level.dat').write_bytes(b'world snapshot')
   (remote.STATE/'servers'/'survival.json').write_text(json.dumps({'path':str(root)}))
   calls=[]
-  with patch.object(remote,'active',side_effect=[True,False]),patch.object(remote,'run',side_effect=lambda *a,**k:calls.append(a)):
+  with patch.object(remote,'snapshot_active',side_effect=[True,False]),patch.object(remote,'run',side_effect=lambda *a,**k:calls.append(a)):
    result=remote.backup({'server':'survival','retain':2})
   self.assertEqual(calls,[('systemctl','stop','mcm-survival.service'),('systemctl','start','mcm-survival.service')])
   (root/'world'/'level.dat').write_bytes(b'changed')
-  with patch.object(remote,'active',return_value=False),patch.object(remote.pwd,'getpwnam',return_value=pwd.getpwuid(remote.os.getuid())),patch.object(remote.os,'chown'):
+  with patch.object(remote,'snapshot_active',return_value=False),patch.object(remote.pwd,'getpwnam',return_value=pwd.getpwuid(remote.os.getuid())),patch.object(remote.os,'chown'):
    restored=remote.restore({'server':'survival','backup':result['backup'],'confirm':'survival'})
   self.assertEqual((root/'world'/'level.dat').read_bytes(),b'world snapshot');self.assertTrue(pathlib.Path(restored['previous_root']).exists())
   target=remote.STATE/'backups'/'survival'/result['backup'];target.write_bytes(b'corrupt')
-  with patch.object(remote,'active',return_value=False),self.assertRaisesRegex(ValueError,'checksum'):remote.restore({'server':'survival','backup':result['backup'],'confirm':'survival'})
+  with patch.object(remote,'snapshot_active',return_value=False),self.assertRaisesRegex(ValueError,'checksum'):remote.restore({'server':'survival','backup':result['backup'],'confirm':'survival'})
+ def test_snapshot_requires_a_loaded_stable_unit(self):
+  for status in ['LoadState=not-found\nActiveState=inactive', 'LoadState=loaded\nActiveState=activating', 'LoadState=loaded\nActiveState=deactivating', '']:
+   with self.subTest(status=status),patch.object(remote,'run',return_value=status),self.assertRaises(ValueError):
+    remote.snapshot_active('survival')
+  with patch.object(remote,'run',return_value='ActiveState=inactive\nLoadState=loaded\n'):
+   self.assertFalse(remote.snapshot_active('survival'))
+ def test_metric_probe_leaves_vm_state_untouched(self):
+  unused=self.base/'empty-state'
+  with patch.object(remote,'STATE',unused),patch.object(remote.os,'geteuid',return_value=0):
+   self.assertGreater(remote.main({'action':'metrics'})['ram_total'],0)
+  self.assertFalse(unused.exists())
  def test_backup_failure_restarts_server(self):
   root=remote.BASE/'survival';root.mkdir();(root/'link').symlink_to('/etc/passwd');(remote.STATE/'servers'/'survival.json').write_text(json.dumps({'path':str(root)}));calls=[]
-  with patch.object(remote,'active',side_effect=[True,False]),patch.object(remote,'run',side_effect=lambda *a,**k:calls.append(a)),self.assertRaises(ValueError):remote.backup({'server':'survival'})
+  with patch.object(remote,'snapshot_active',side_effect=[True,False]),patch.object(remote,'run',side_effect=lambda *a,**k:calls.append(a)),self.assertRaises(ValueError):remote.backup({'server':'survival'})
   self.assertEqual(calls[-1],('systemctl','start','mcm-survival.service'))
  def test_invalid_deploy_has_no_os_side_effects(self):
   with patch.object(remote,'run') as run,self.assertRaises(ValueError):remote.deploy({'server':'bad;id','port':25565,'ram_mb':2048,'eula':True})
