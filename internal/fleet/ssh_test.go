@@ -82,3 +82,18 @@ func TestSSHHostPinningAndInputFraming(t *testing.T) {
 		t.Fatalf("host key mismatch was not identified: %v", e)
 	}
 }
+
+func TestSSHOutputBudgetAcrossStreamCopies(t *testing.T) {
+	out := &boundedBuffer{max: 8}
+	for _, part := range []string{"first", "two"} {
+		if _, err := io.Copy(out, io.LimitReader(strings.NewReader(part), int64(len(part)))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := io.Copy(out, io.LimitReader(strings.NewReader("x"), 1)); err == nil {
+		t.Fatal("stdout stream exceeded its configured budget")
+	}
+	if got := out.data.String(); got != "firsttwo" {
+		t.Fatalf("buffer changed: %q", got)
+	}
+}

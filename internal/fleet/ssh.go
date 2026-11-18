@@ -33,15 +33,15 @@ var (
 )
 
 type boundedBuffer struct {
-	bytes.Buffer
-	max int
+	data bytes.Buffer
+	max  int
 }
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
-	if b.Len()+len(p) > b.max {
+	if b.data.Len()+len(p) > b.max {
 		return 0, errors.New("remote output exceeds limit")
 	}
-	return b.Buffer.Write(p)
+	return b.data.Write(p)
 }
 func dial(ctx context.Context, h Host, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 	d := net.Dialer{Timeout: 10 * time.Second}
@@ -135,7 +135,7 @@ func (SSHRunner) Run(ctx context.Context, h Host, input map[string]any) (json.Ra
 	if e = session.Run(command); e != nil {
 		return nil, errors.New("remote operation failed: verify Python 3, sudo rights, OS and connectivity; inspect VM state before retry")
 	}
-	result := bytes.TrimSpace(out.Bytes())
+	result := bytes.TrimSpace(out.data.Bytes())
 	if !json.Valid(result) {
 		return nil, errors.New("invalid remote response")
 	}
