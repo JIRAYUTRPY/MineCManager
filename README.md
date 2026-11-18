@@ -1,3 +1,11 @@
+# MineCManager — Panel-first VM management
+
+เริ่มต้นใหม่: [ติดตั้ง Panel เดียวและเพิ่ม VM ผ่านเว็บ](docs/install-panel-th.md). ใช้ `docker compose up -d --build` แล้วเปิด `/fleet` เพื่อเพิ่ม VM ผ่าน SSH, ดูทรัพยากร, deploy Paper/Purpur/Fabric/Vanilla, จัดการ OS, Cloudflare DNS และ scheduled R2 backups.
+
+Fleet ใช้สิทธิ์ `admin:fleet` ระดับ root แยกจาก Agent API เดิม อ่าน [architecture](docs/fleet-architecture.md) และ [API](api/fleet-openapi.yaml) ก่อนเชื่อม integration. ไม่ต้องติดตั้ง Agent สำหรับ flow ใหม่; legacy Agent/Paper UI ยังอยู่ที่ `/`.
+
+---
+
 # MineCManager
 
 Go control plane and VM agent for managing a systemd-hosted Minecraft server. The panel includes a Thai admin UI, scoped API keys, node registration, plugin/config versioning, stopped-server backups and verified restore.

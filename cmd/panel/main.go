@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -8,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/JIRAYUTRPY/MineCManager/internal/fleet"
 	"github.com/JIRAYUTRPY/MineCManager/internal/lock"
 	"io"
 	"log"
@@ -45,6 +47,7 @@ type server struct {
 	mu          sync.Mutex
 	cfgMu       sync.RWMutex
 	configPath  string
+	fleet       *fleet.Service
 	auditFailed error
 }
 type auditEvent struct {
@@ -58,7 +61,7 @@ type auditEvent struct {
 }
 
 var validID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-var scopes = map[string]bool{"nodes:read": true, "nodes:control": true, "plugins:read": true, "plugins:write": true, "configs:read": true, "configs:write": true, "backups:read": true, "backups:write": true, "backups:restore": true, "admin:keys": true, "admin:nodes": true, "audit:read": true, "players:read": true, "inventory:read": true, "inventory:write": true, "resources:read": true}
+var scopes = map[string]bool{"admin:fleet": true, "nodes:read": true, "nodes:control": true, "plugins:read": true, "plugins:write": true, "configs:read": true, "configs:write": true, "backups:read": true, "backups:write": true, "backups:restore": true, "admin:keys": true, "admin:nodes": true, "audit:read": true, "players:read": true, "inventory:read": true, "inventory:write": true, "resources:read": true}
 
 func validate(c config) error {
 	if len(c.Keys) == 0 {
@@ -203,6 +206,21 @@ func requestID() string {
 func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if strings.HasPrefix(r.URL.Path, "/v1/fleet/") {
+		s.cfgMu.RLock()
+		id, ok := s.authorize(r, "admin:fleet")
+		s.cfgMu.RUnlock()
+		if !ok {
+			http.Error(w, "forbidden: admin:fleet required", 403)
+			return
+		}
+		if s.fleet == nil {
+			http.Error(w, "fleet not configured", 503)
+			return
+		}
+		s.fleet.Handle(w, r, id)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/v1/keys") || r.URL.Path == "/v1/audit" || (r.URL.Path == "/v1/nodes" && r.Method != "GET") || strings.HasPrefix(r.URL.Path, "/v1/registrations/") {
 		s.admin(w, r)
 		return
@@ -373,6 +391,12 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(b)
 }
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		if e := initialize(); e != nil {
+			log.Fatal(e)
+		}
+		return
+	}
 	path := os.Getenv("MCM_PANEL_CONFIG")
 	if path == "" {
 		log.Fatal("MCM_PANEL_CONFIG required")
@@ -407,8 +431,41 @@ func main() {
 		log.Fatal(e)
 	}
 	s := &server{cfg: cfg, audit: f, configPath: path, client: client}
+	if vaultPath := os.Getenv("MCM_FLEET_VAULT"); vaultPath != "" {
+		key, e := os.ReadFile(os.Getenv("MCM_VAULT_KEY_FILE"))
+		if e != nil {
+			log.Fatal(e)
+		}
+		store, e := fleet.Open(vaultPath, key)
+		if e != nil {
+			log.Fatal(e)
+		}
+		s.fleet = &fleet.Service{Store: store, Runner: fleet.SSHRunner{}, Guard: s.fleetGuard, Audit: func(actor, host, action, phase string, status int) error {
+			return s.record(auditEvent{RequestID: requestID(), KeyID: actor, NodeID: host, Action: action, Phase: phase, Status: status})
+		}}
+		go s.fleet.Run(context.Background())
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/", s.handle)
 	mux.HandleFunc("/", s.ui)
-	log.Fatal((&http.Server{Addr: "127.0.0.1:9080", Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 120 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 8192}).ListenAndServe())
+	listen := os.Getenv("MCM_PANEL_LISTEN")
+	if listen == "" {
+		listen = "127.0.0.1:9080"
+	}
+	log.Fatal((&http.Server{Addr: listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 120 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 8192}).ListenAndServe())
+}
+
+func (s *server) fleetGuard(actor string) bool {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	for _, k := range s.cfg.Keys {
+		if k.ID == actor && !k.Revoked && (k.ExpiresAt == nil || time.Now().Before(*k.ExpiresAt)) {
+			for _, scope := range k.Scopes {
+				if scope == "admin:fleet" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

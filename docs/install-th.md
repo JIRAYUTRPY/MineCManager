@@ -1,3 +1,5 @@
+> **ต้องการติดตั้งแค่ Panel แล้วเพิ่ม VM ผ่านเว็บ? ใช้ [คู่มือ Panel-first ใหม่](install-panel-th.md)** คู่มือด้านล่างสำหรับ legacy Agent/Paper bridge แบบติดตั้งแยกเท่านั้น
+
 # คู่มือติดตั้ง MineCManager บน Ubuntu
 
 คู่มือนี้อ้างอิงโค้ดใน branch `feat/management-scope` ของ PR #2 สำหรับ **เครื่องใหม่** ใช้ Bash และบัญชีที่มี sudo เริ่มจากเครื่องเดียวให้ทำงานครบก่อน แล้วจึงแยก Panel/Agent ตามหัวข้อท้ายเอกสาร
