@@ -24,6 +24,9 @@ type fakeRunner struct {
 func (f *fakeRunner) Run(_ context.Context, _ Host, q map[string]any) (json.RawMessage, error) {
 	f.calls++
 	f.input = q
+	if q["action"] == "metrics" {
+		return json.RawMessage(`{"cpu_count":2,"ram_total":1024,"disk_total":4096}`), f.err
+	}
 	return json.RawMessage(`{"ok":true}`), f.err
 }
 func fixture(t *testing.T) (*Service, *fakeRunner) {
@@ -95,7 +98,7 @@ func TestRevokePreventsQueuedDispatch(t *testing.T) {
 	call(s, "POST", "jobs", `{"host":"game","action":"metrics"}`)
 	s.Guard = func(string) bool { return false }
 	s.tick(context.Background())
-	if r.calls != 0 || s.Store.data.Jobs[0].Status != "failed" {
+	if r.calls != 1 || s.Store.data.Jobs[0].Status != "failed" {
 		t.Fatal("revoked job ran")
 	}
 }
@@ -105,7 +108,7 @@ func TestAuditFailurePreventsDispatch(t *testing.T) {
 	call(s, "POST", "jobs", `{"host":"game","action":"metrics"}`)
 	s.Audit = func(string, string, string, string, int) error { return errors.New("disk failed") }
 	s.tick(context.Background())
-	if r.calls != 0 {
+	if r.calls != 1 {
 		t.Fatal("unaudited command ran")
 	}
 }
@@ -117,7 +120,7 @@ func TestJobLifecycleAndUntrustedUploadURL(t *testing.T) {
 		t.Fatal(w.Body)
 	}
 	s.tick(context.Background())
-	if r.calls != 1 || r.input["upload_url"] != nil || s.Store.data.Jobs[0].Status != "succeeded" || s.Store.data.Jobs[0].Input != nil {
+	if r.calls != 2 || r.input["upload_url"] != nil || s.Store.data.Jobs[0].Status != "succeeded" || s.Store.data.Jobs[0].Input != nil {
 		t.Fatal("invalid lifecycle")
 	}
 }
@@ -141,7 +144,7 @@ func TestScheduleAndRevocation(t *testing.T) {
 	sc := Schedule{ID: "daily", Host: "game", Server: "survival", EveryHours: 24, Retain: 7, Enabled: true, Actor: "admin", Next: time.Now().Add(-time.Hour)}
 	s.Store.data.Schedules[sc.ID] = sc
 	s.tick(context.Background())
-	if r.calls != 1 || r.input["action"] != "backup" {
+	if r.calls != 2 || r.input["action"] != "backup" {
 		t.Fatal("schedule did not dispatch")
 	}
 	s.Guard = func(string) bool { return false }

@@ -33,14 +33,16 @@ paths:
       responses:
         '200': {description: Host array; secret properties omitted}
     post:
-      summary: Enroll a new SSH host; submit a metrics job to test connectivity
+      summary: Verify pinned SSH access and host metrics, then enroll a new host
       requestBody:
         required: true
         content:
           application/json:
             schema: {$ref: '#/components/schemas/Host'}
       responses:
-        '201': {description: Persisted host without secrets}
+        '201': {$ref: '#/components/responses/VerifiedHost'}
+        '502': {description: SSH or metrics check failed before save}
+        '504': {description: Host check timed out}
         '409': {description: Host ID already exists}
     put:
       summary: Explicitly replace host connection details and credentials
@@ -50,7 +52,23 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Host'}
       responses:
-        '201': {description: Updated host without secrets}
+        '201': {$ref: '#/components/responses/VerifiedHost'}
+        '409': {description: Registration changed during verification or the endpoint has pending jobs}
+        '502': {description: SSH or metrics check failed and the previous registration was retained}
+        '504': {description: Host check timed out}
+  /hosts/test:
+    post:
+      summary: Verify the supplied host and return live metrics without saving credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Host'}
+      responses:
+        '200': {$ref: '#/components/responses/VerifiedHost'}
+        '400': {description: Invalid host or fingerprint}
+        '502': {description: Host verification or metrics failed}
+        '504': {description: Host check timed out}
   /hosts/{id}:
     delete:
       summary: Unregister host and schedules; does not change the VM
@@ -175,6 +193,28 @@ paths:
       responses:
         '200': {description: Removed}
 components:
+  responses:
+    VerifiedHost:
+      description: Public host fields and live CPU, memory, root disk and uptime readings
+      content:
+        application/json:
+          schema:
+            allOf:
+              - {$ref: '#/components/schemas/Host'}
+              - type: object
+                required: [metrics]
+                properties:
+                  metrics:
+                    type: object
+                    properties:
+                      cpu_count: {type: integer}
+                      cpu_percent: {type: number}
+                      ram_total: {type: integer, format: int64, description: Bytes}
+                      ram_available: {type: integer, format: int64, description: Bytes}
+                      disk_total: {type: integer, format: int64, description: Bytes}
+                      disk_free: {type: integer, format: int64, description: Bytes}
+                      uptime_seconds: {type: number}
+                      os: {type: string, description: Contents of /etc/os-release}
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer}
   parameters:

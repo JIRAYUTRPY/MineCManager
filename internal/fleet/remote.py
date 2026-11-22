@@ -54,6 +54,17 @@ def unit(sid): return 'mcm-' + ident(sid) + '.service'
 def active(sid):
     return subprocess.run(['systemctl', 'is-active', '--quiet', unit(sid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
+def snapshot_active(sid):
+    """A missing unit, lost system bus or transitioning unit cannot prove a stopped world."""
+    output = run('systemctl', 'show', '--property=LoadState,ActiveState', unit(sid), timeout=20)
+    fields = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
+    if fields.get('LoadState') != 'loaded':
+        raise ValueError('cannot verify the managed service; check that its systemd unit is loaded')
+    state = fields.get('ActiveState')
+    if state not in ('active', 'inactive'):
+        raise ValueError('service must reach a stable active or inactive state before backup or restore')
+    return state == 'active'
+
 def fetch_json(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': UA}), timeout=30) as r:
         return json.loads(r.read(4*1024*1024))
@@ -166,10 +177,10 @@ def file_action(q):
 def backup(q):
     sid=ident(q['server']);m=metadata(sid);root=pathlib.Path(m['path']);folder=STATE/'backups'/sid;folder.mkdir(parents=True,exist_ok=True)
     name=time.strftime('%Y%m%dT%H%M%SZ',time.gmtime())+'-'+uuid.uuid4().hex[:8]+'.tar.gz';target=folder/name
-    was_active=active(sid)
+    was_active=snapshot_active(sid)
     if was_active: run('systemctl','stop',unit(sid))
     try:
-        if active(sid): raise ValueError('server did not stop')
+        if snapshot_active(sid): raise ValueError('server did not stop')
         # Refuse links/devices so restore has an unambiguous contained tree.
         for p in root.rglob('*'):
             if p.is_symlink() or not (p.is_file() or p.is_dir()): raise ValueError('backup tree contains a link or special file')
@@ -194,7 +205,7 @@ def backup(q):
 
 def import_r2(q):
     sid=ident(q['server']);metadata(sid)
-    if active(sid) or q.get('confirm')!=sid: raise ValueError('stop server and confirm ID before importing R2 backup')
+    if snapshot_active(sid) or q.get('confirm')!=sid: raise ValueError('stop server and confirm ID before importing R2 backup')
     expected=q.get('sha256','')
     if not re.fullmatch(r'[a-f0-9]{64}',expected): raise ValueError('expected SHA-256 from backup result required')
     folder=STATE/'backups'/sid;folder.mkdir(parents=True,exist_ok=True)
@@ -218,7 +229,7 @@ def restore(q):
     name=q['backup']
     if not re.fullmatch(r'[0-9TZ]+-[a-f0-9]{8}\.tar\.gz',name): raise ValueError('invalid backup ID')
     target=STATE/'backups'/sid/name
-    if q.get('confirm')!=sid or active(sid): raise ValueError('stop server and confirm server ID before restoring')
+    if q.get('confirm')!=sid or snapshot_active(sid): raise ValueError('stop server and confirm server ID before restoring')
     with open(target,'rb') as f: digest=hashlib.file_digest(f,'sha256').hexdigest()
     if digest!=pathlib.Path(str(target)+'.sha256').read_text(): raise ValueError('backup checksum mismatch')
     stage=pathlib.Path(tempfile.mkdtemp(prefix='.restore-',dir=BASE))
@@ -231,6 +242,7 @@ def restore(q):
         restored=stage/'server';account=pwd.getpwnam('mcm-game')
         for p in [restored,*restored.rglob('*')]:os.chown(p,account.pw_uid,account.pw_gid)
         previous=BASE/(sid+'.before-restore-'+uuid.uuid4().hex)
+        if snapshot_active(sid): raise ValueError('server started during restore; stop it before retrying')
         os.rename(root,previous)
         try: os.rename(restored,root)
         except Exception: os.rename(previous,root);raise
@@ -239,12 +251,13 @@ def restore(q):
 
 def main(q):
     if os.geteuid()!=0: raise ValueError('root or sudo access required')
+    if q['action'] == 'metrics':
+        return metrics()
     STATE.mkdir(mode=0o700,parents=True,exist_ok=True)
     with open(STATE/'control.lock','a') as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         for d in ('servers','file-history','backups'): (STATE/d).mkdir(mode=0o700,exist_ok=True)
         action=q['action']
-        if action=='metrics':return metrics()
         if action=='servers':return {'servers':[json.loads(p.read_text())|{'active':active(p.stem)} for p in (STATE/'servers').glob('*.json')]}
         if action=='deploy':return deploy(q)
         if action in ('files','read','write'):return file_action(q)
