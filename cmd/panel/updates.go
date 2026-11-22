@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/JIRAYUTRPY/MineCManager/internal/updates"
 )
@@ -69,7 +71,9 @@ func (s *server) nodeUpdate(r *http.Request, id string, q updates.Request) updat
 		b, _ := json.Marshal(q)
 		body = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, node.URL+"/v1/updates", body)
+	ctx, cancel := context.WithTimeout(r.Context(), 55*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, r.Method, node.URL+"/v1/updates", body)
 	if err != nil {
 		return updates.Response{Code: 500, Error: "invalid agent configuration"}
 	}

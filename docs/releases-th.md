@@ -48,7 +48,7 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 
 ตัวตรวจอ่าน `/releases/latest` ของ repo นี้เท่านั้น รับเฉพาะ published stable release ที่ tag มีรูปแบบ `vMAJOR.MINOR.PATCH` เมื่อไม่มี release จะแสดงว่าไม่มีรุ่นให้อัปเดต เมื่อ GitHub ใช้งานไม่ได้จะแสดงข้อผิดพลาด ก่อนติดตั้ง worker ตรวจว่า release ยังตรงกับรุ่นที่กด แล้วตรวจ GitHub asset digest และ `SHA256SUMS` ก่อนหยุด service
 
-การอัปเดต Panel รีสตาร์ตเฉพาะ Panel การอัปเดต VM เกมเปลี่ยน Agent กับ bridge พร้อมกัน เกมที่เปิดอยู่จะเริ่มกลับและตรวจ bridge หลังอัปเดต เกมที่ปิดอยู่จะคงสถานะปิด ขณะ service รีสตาร์ตหน้าเว็บอาจขาดการติดต่อชั่วคราว กด **โหลดสถานะ** เพื่อตรวจผลได้อีกครั้ง เมื่อ health check ไม่ผ่าน worker สลับกลับ binary/JAR รุ่นเดิมและบันทึกผล ถ้าไฟดับระหว่างสลับรุ่น worker จะกู้รุ่นก่อนหน้าเมื่อเครื่องเริ่มใหม่
+การอัปเดต Panel รีสตาร์ตเฉพาะ Panel การอัปเดต VM เกมใช้ lock เดียวกับ Fleet หากกำลัง backup หรือ restore ให้รอ job นั้นจบแล้วกดอัปเดตอีกครั้ง ตัวอัปเดตเปลี่ยน Agent กับ bridge พร้อมกัน เกมที่เปิดอยู่จะเริ่มกลับและตรวจ bridge หลังอัปเดต เกมที่ปิดอยู่จะคงสถานะปิด ขณะ service รีสตาร์ตหน้าเว็บอาจขาดการติดต่อชั่วคราว กด **โหลดสถานะ** เพื่อตรวจผลได้อีกครั้ง เมื่อ health check ไม่ผ่าน worker สลับกลับ binary/JAR รุ่นเดิมและบันทึกผล ถ้าไฟดับระหว่างสลับรุ่น worker จะกู้รุ่นก่อนหน้าเมื่อเครื่องเริ่มใหม่
 
 | ตำแหน่ง | เนื้อหา |
 |---|---|
@@ -58,11 +58,11 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 | `/var/lib/mcm-release` | สถานะการตรวจและงานอัปเดต |
 | `/srv/minecmanager/<id>` | world, plugins และ config ของเกม |
 
-ดู log ด้วย `sudo journalctl -u mcm-release-apply -u mcm-release-check` และอ่านสถานะด้วย `sudo python3 /opt/minecmanager/current/setup.py status` กรณี `rollback_failed` ให้แก้เหตุใน log สำรอง state และตรวจ unit/พื้นที่ดิสก์ก่อนพยายามกู้คืน ใบรับรองเครื่องมีอายุ 825 วัน เก็บ CA และวางแผนต่ออายุผ่านกระบวนการจัดการ certificate ของระบบ
+ดู log ด้วย `sudo journalctl -u mcm-release-apply -u mcm-release-check` และอ่านสถานะด้วย `sudo python3 /opt/minecmanager/current/setup.py status` กรณี `rollback_failed` ให้แก้เหตุใน log สำรอง state และตรวจ unit/พื้นที่ดิสก์ แล้วใช้ `sudo python3 /opt/minecmanager/current/setup.py recover` เพื่อกู้ release ก่อนหน้าอีกครั้ง ใบรับรองเครื่องมีอายุ 825 วัน เก็บ CA และวางแผนต่ออายุผ่านกระบวนการจัดการ certificate ของระบบ
 
 ### เครื่องที่ติดตั้งด้วย Compose หรือ systemd เดิม
 
-เลือก VM ใหม่สำหรับการติดตั้งแบบ managed หรือย้ายใน maintenance window ตัว installer ตรวจ service/port ที่มีเจ้าของอยู่และหยุดก่อนติดตั้ง สำหรับ Compose เดิม ให้หยุด Panel เดิม สำรอง named volume ทั้งชุดก่อนย้าย คัดลอก `panel.json`, `fleet.vault`, `vault.key`, `audit.jsonl` และ `admin-key.txt` จาก `/data` มาไว้ใน `/var/lib/mcm-managed-panel` และให้ user `mcm-panel` เป็นเจ้าของไฟล์ด้วยสิทธิ์ 0600 เก็บ env token และ CA/client certificate สำหรับ node เดิมให้เข้ากันก่อนเริ่ม service มีเพียง instance เดียวที่ควรเขียนข้อมูลชุดนี้ การย้ายจาก agent/manual bridge เดิมให้สำรอง service, secret และ JAR เดิมก่อน เครื่องที่ใช้ Compose ต่อยังใช้ UI และจัดการ node แบบ managed ได้ ปุ่มอัปเดตตัว Panel เองต้องมี managed updater บน host
+เลือก VM ใหม่สำหรับการติดตั้งแบบ managed หรือย้ายใน maintenance window ตัว installer ตรวจ service/port ที่มีเจ้าของอยู่และหยุดก่อนติดตั้ง สำหรับ Compose เดิม ให้หยุด Panel เดิม สำรอง named volume ทั้งชุดก่อนย้าย คัดลอก `panel.json`, `fleet.vault`, `vault.key`, `audit.jsonl` และ `admin-key.txt` จาก `/data` มาไว้ใน `/var/lib/mcm-managed-panel` และให้ user `mcm-panel` เป็นเจ้าของไฟล์ด้วยสิทธิ์ 0600 ถ้ามี node เดิม ให้ตั้ง env ของ token และ path ของ CA/client certificate ใน `/etc/mcm-managed/panel-local.env` (root:root, 0600) ก่อนเริ่ม service กรณีใช้หลาย CA ให้จัด trust bundle และ client certificate ที่ทุก Agent ยอมรับ มีเพียง instance เดียวที่ควรเขียนข้อมูลชุดนี้ การย้ายจาก agent/manual bridge เดิมให้สำรอง service, secret และ JAR เดิมก่อน เครื่องที่ใช้ Compose ต่อยังใช้ UI และจัดการ node แบบ managed ได้ ปุ่มอัปเดตตัว Panel เองต้องมี managed updater บน host
 
 ## 4. ออก release
 

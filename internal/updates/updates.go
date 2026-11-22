@@ -2,6 +2,7 @@
 package updates
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,7 +35,11 @@ func Parse(r *http.Request) (Request, error) {
 	if r.Method != http.MethodPost {
 		return q, errors.New("use GET or POST")
 	}
-	d := json.NewDecoder(io.LimitReader(r.Body, 1025))
+	b, err := io.ReadAll(io.LimitReader(r.Body, 1025))
+	if err != nil || len(b) > 1024 {
+		return q, errors.New("update request exceeds 1 KiB")
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
 	if err := d.Decode(&q); err != nil || d.Decode(new(any)) != io.EOF {
 		return q, errors.New("invalid update request")

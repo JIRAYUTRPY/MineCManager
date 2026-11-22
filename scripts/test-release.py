@@ -18,10 +18,11 @@ class ReleaseTests(unittest.TestCase):
         work = tempfile.TemporaryDirectory()
         self.addCleanup(work.cleanup)
         root = Path(work.name)
-        for name in ("STATE", "ETC", "BASE"):
+        for name in ("STATE", "ETC", "BASE", "FLEET_STATE"):
             p = root / name
             p.mkdir()
             self.enterContext(patch.object(installer, name, p))
+        (installer.FLEET_STATE / "servers").mkdir()
         self.enterContext(patch.object(installer.platform, "machine", return_value="x86_64"))
 
     def fixture(self, tag):
@@ -63,6 +64,19 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(installer.queue("v1.2.0")["phase"], "queued")
             with self.assertRaises(installer.Problem):
                 installer.queue("v1.2.0")
+
+    def test_game_patch_waits_for_fleet_backup(self):
+        installer.select("v1.0.0")
+        installer.save(installer.ETC / "install.json", {"role": "game"})
+        installer.record(phase="queued", target="v1.1.0", previous="v1.0.0")
+        with installer.fleet_lock({"role": "game"}), patch.object(installer, "stage"), \
+                patch.object(installer, "latest", return_value={"tag_name": "v1.1.0"}), \
+                patch.object(installer, "activate") as activate:
+            with self.assertRaisesRegex(installer.Problem, "Fleet operation"):
+                installer.apply_update()
+            activate.assert_not_called()
+        self.assertEqual(installer.status()["phase"], "failed")
+        self.assertEqual(installer.installed(), "v1.0.0")
 
     def test_interrupted_activation_restores_previous(self):
         installer.select("v1.2.0")

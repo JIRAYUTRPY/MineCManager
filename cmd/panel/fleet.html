@@ -36,7 +36,7 @@ function updatePath() {
   const id = v('updateTarget');
   return 'updates' + (id ? '?node=' + encodeURIComponent(id) : '');
 }
-async function refreshRelease(data) {
+async function refreshRelease(data, reportError = false) {
   const path = updatePath(), seq = ++releaseSequence;
   const waiting = shownRelease && ['queued', 'applying'].includes(shownRelease.phase);
   clearTimeout(updateTimer);
@@ -46,7 +46,7 @@ async function refreshRelease(data) {
     shownRelease = s;
     const labels = {installed:'ติดตั้งแล้ว', queued:'รอดำเนินการ', applying:'กำลังอัปเดต', succeeded:'อัปเดตสำเร็จ', failed:'อัปเดตไม่สำเร็จ', rollback_failed:'ต้องตรวจการกู้คืน'};
     const busy = ['queued', 'applying'].includes(s.phase);
-    $('releaseInfo').textContent = ['ติดตั้ง ' + s.installed, 'GitHub Latest ' + (s.latest || '—'),
+    $('releaseInfo').textContent = ['ติดตั้ง ' + s.installed, 'GitHub Latest ' + (s.latest || (s.check_error ? 'ตรวจไม่สำเร็จ' : 'ยังไม่มี stable release')),
       s.checked ? 'ตรวจเมื่อ ' + new Date(s.checked).toLocaleString('th-TH') : '',
       labels[s.phase] || s.phase, s.check_error || s.message].filter(Boolean).join(' · ');
     $('applyRelease').disabled = !s.available || busy || s.phase === 'rollback_failed';
@@ -56,6 +56,7 @@ async function refreshRelease(data) {
     $('releaseInfo').textContent = e.message;
     $('applyRelease').disabled = true;
     if (waiting && v('key')) updateTimer = setTimeout(() => refreshRelease(), 5000);
+    if (reportError) throw e;
   }
 }
 async function loadReleaseTargets() {
@@ -71,8 +72,8 @@ async function loadReleaseTargets() {
   }
 }
 $('updateTarget').onchange = () => { clearRelease(); refreshRelease(); };
-bind('checkRelease', () => refreshRelease({action:'check'}));
-bind('releaseStatus', () => refreshRelease());
+bind('checkRelease', () => refreshRelease({action:'check'}, true));
+bind('releaseStatus', () => refreshRelease(undefined, true));
 bind('applyRelease', async () => {
   const target = shownRelease && shownRelease.latest;
   if (!target || $('applyRelease').disabled) return;
@@ -80,7 +81,7 @@ bind('applyRelease', async () => {
   const effect = name ? 'เกมที่เปิดอยู่จะรีสตาร์ต' : 'Panel จะรีสตาร์ต';
   if (!confirm('อัปเดต ' + (name || 'Panel') + ' เป็น ' + target + '? ' + effect)) return;
   $('applyRelease').disabled = true;
-  await refreshRelease({action:'apply', version:target});
+  await refreshRelease({action:'apply', version:target}, true);
 });
 bind('connect',async()=>{await hosts();await jobs();void loadReleaseTargets();clearInterval(pollTimer);pollTimer=setInterval(()=>{if(v('key'))jobs().catch(()=>{})},5000)});bind('logout',()=>{clearRelease();$('releaseInfo').textContent='เชื่อมต่อเพื่อดูเวอร์ชัน';$('updateTarget').replaceChildren(new Option('Panel',''));clearInterval(pollTimer);$('key').value='';$('password').value='';$('privateKey').value='';$('cfToken').value='';$('accessKey').value='';$('secretKey').value='';$('host').replaceChildren();$('jobRows').replaceChildren();$('fileContent').value='';fileHash='';$('metricsView').replaceChildren();$('trust').checked=false;show('ออกจากระบบแล้ว')});
 for (const field of ['address', 'port', 'fingerprint']) {

@@ -32,6 +32,7 @@ BASE = Path("/opt/minecmanager")
 ETC = Path("/etc/mcm-managed")
 STATE = Path("/var/lib/mcm-release")
 PANEL_DATA = Path("/var/lib/mcm-managed-panel")
+FLEET_STATE = Path("/var/lib/minecmanager")
 UNITS = Path("/etc/systemd/system")
 TAG = re.compile(r"v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})")
 NODE = re.compile(r"[a-z][a-z0-9-]{0,31}")
@@ -260,7 +261,7 @@ def queue(tag):
             raise Problem("Check releases again before applying a newer version")
         record(phase="queued", target=tag, message="", previous=state["installed"])
         try:
-            unit("start", "--no-block", "mcm-release-apply.service")
+            unit("restart", "--no-block", "mcm-release-apply.service")
         except Exception:
             record(phase="failed", message="Could not start the update worker")
             raise
@@ -356,7 +357,7 @@ ExecStart=/usr/bin/python3 {BASE}/current/setup.py rpc
 StandardInput=socket
 StandardOutput=socket
 StandardError=journal
-TimeoutStartSec=60
+RuntimeMaxSec=90
 """)
     for action in ("apply", "check"):
         boot = "[Install]\nWantedBy=multi-user.target\n" if action == "apply" else ""
@@ -416,6 +417,7 @@ def prepare_panel():
     })
     service_file("mcm-panel", f"""EnvironmentFile={ETC}/panel.env
 EnvironmentFile=-{ETC}/nodes.env
+EnvironmentFile=-{ETC}/panel-local.env
 ExecStartPre={BASE}/current/mcm-panel init
 ReadWritePaths={PANEL_DATA}""")
 
@@ -515,6 +517,31 @@ def health(cfg, running):
     raise Problem("Health check timed out for " + service, 502)
 
 
+@contextlib.contextmanager
+def fleet_lock(cfg):
+    if cfg["role"] != "game":
+        yield
+        return
+    if not (FLEET_STATE / "servers").is_dir():
+        raise Problem("Deploy the Paper server using Fleet before pairing")
+    with (FLEET_STATE / "control.lock").open("a") as stream:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Problem("A Fleet operation is running on the game VM; retry after it completes") from None
+        yield
+
+
+def game_running(cfg):
+    if cfg["role"] != "game":
+        return False
+    state = run("systemctl", "show", "-p", "ActiveState", "--value", game_unit(cfg),
+                capture_output=True, text=True).stdout.strip()
+    if state not in ("active", "inactive"):
+        raise Problem("Game service must be active or inactive before maintenance: " + state)
+    return state == "active"
+
+
 def activate(cfg, tag, running):
     if cfg["role"] == "game":
         unit("stop", "mcm-agent.service")
@@ -544,7 +571,8 @@ def apply_update():
             return
         cfg = read(ETC / "install.json")
         if state["phase"] == "applying":
-            rollback(cfg, state, "Interrupted update")
+            with fleet_lock(cfg):
+                rollback(cfg, state, "Interrupted update")
             return
         try:
             release = latest()
@@ -552,16 +580,30 @@ def apply_update():
             if not release or release["tag_name"] != target or version(target) <= version(installed()):
                 raise Problem("Selected release is stale; check releases again")
             stage(release, cfg["role"])
-            running = cfg["role"] == "game" and active(game_unit(cfg))
-            state = record(phase="applying", previous=installed(), game_active=running)
-            activate(cfg, target, running)
+            with fleet_lock(cfg):
+                state = record(phase="applying", previous=installed(), game_active=game_running(cfg))
+                try:
+                    activate(cfg, target, state["game_active"])
+                except Exception as err:
+                    rollback(cfg, state, str(err))
+                    raise
+                record(phase="succeeded", message="", completed=now())
         except Exception as err:
-            if state.get("phase") == "applying":
-                rollback(cfg, state, str(err))
-            else:
+            if state["phase"] == "queued":
                 record(phase="failed", message=str(err))
             raise
-        record(phase="succeeded", message="", completed=now())
+
+
+def recover():
+    with locked():
+        state = status()
+        if state.get("phase") not in ("applying", "rollback_failed"):
+            raise Problem("There is no interrupted rollback to recover")
+        cfg = read(ETC / "install.json")
+        with fleet_lock(cfg):
+            rollback(cfg, state, "Operator recovery")
+        return status()
+
 
 def preflight(cfg):
     service = "mcm-panel" if cfg["role"] == "panel" else "mcm-agent"
@@ -574,7 +616,7 @@ def preflight(cfg):
     with socket.socket(socket.AF_INET6 if ":" in address else socket.AF_INET) as s:
         s.bind((address, port))
     if cfg["role"] == "game":
-        meta = read(Path("/var/lib/minecmanager/servers") / (cfg["id"] + ".json"))
+        meta = read(FLEET_STATE / "servers" / (cfg["id"] + ".json"))
         if meta.get("platform") != "paper" or meta.get("version") != "1.21.11" or meta.get("path") != str(game_root(cfg)):
             raise Problem("Expected a Fleet Paper 1.21.11 server with the given ID")
         plugins = game_root(cfg) / "plugins"
@@ -593,7 +635,7 @@ def install(role, pair_path=None):
         if not NODE.fullmatch(node) or not re.fullmatch(r"[a-f0-9]{64}", pairing["token"]):
             raise Problem("Invalid enrollment file", 400)
         cfg.update(id=node, address=address)
-    with locked():
+    with locked(), fleet_lock(cfg):
         existing = read(ETC / "install.json", {})
         if existing and existing != cfg:
             raise Problem("This VM already manages a different role or node")
@@ -601,6 +643,12 @@ def install(role, pair_path=None):
         if existing and state.get("phase") != "installing":
             if not installed():
                 raise Problem("Incomplete installation: current release missing")
+            if pairing:
+                tls = ETC / "agent-tls"
+                if any((tls / name).read_text() != pairing[name] for name in ("ca.pem", "cert.pem", "key.pem")):
+                    raise Problem("Enrollment differs from the installed node credentials")
+                if "MCM_AGENT_TOKEN=" + pairing["token"] not in (ETC / "agent.env").read_text().splitlines():
+                    raise Problem("Enrollment token differs from the installed node")
             return state
         release = latest()
         if not release:
@@ -610,7 +658,7 @@ def install(role, pair_path=None):
         stage(release, role)
         ETC.mkdir(mode=0o755, parents=True, exist_ok=True)
         if not existing:
-            record(phase="installing", game_active=role == "game" and active(game_unit(cfg)))
+            record(phase="installing", game_active=game_running(cfg))
             save(ETC / "install.json", cfg)
         running = status()["game_active"]
         tag = release["tag_name"]
@@ -734,7 +782,7 @@ def main():
     link.add_argument("address")
     link.add_argument("--ssh", help="also install on this verified SSH destination using passwordless sudo")
     link.add_argument("--admin-key-file", default=str(PANEL_DATA / "admin-key.txt"))
-    for cmd in ("status", "check", "rpc", "worker-apply", "worker-check"):
+    for cmd in ("status", "check", "recover", "rpc", "worker-apply", "worker-check"):
         commands.add_parser(cmd)
     args = parser.parse_args()
     if os.geteuid() != 0:
@@ -751,6 +799,8 @@ def main():
         result = pair(args)
     elif args.command in ("check", "worker-check"):
         result = check()
+    elif args.command == "recover":
+        result = recover()
     elif args.command == "worker-apply":
         apply_update()
         return

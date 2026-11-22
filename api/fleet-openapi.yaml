@@ -43,7 +43,7 @@ paths:
         '200': {description: Check completed}
         '202': {description: Update queued}
         '403': {description: Requires admin:fleet}
-        '409': {description: Busy, stale selection or downgrade}
+        '409': {description: "Busy, stale selection or downgrade"}
         '502': {description: GitHub or Agent unavailable}
   /discover:
     post:
