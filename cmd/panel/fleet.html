@@ -78,7 +78,7 @@ bind('applyRelease', async () => {
   const target = shownRelease && shownRelease.latest;
   if (!target || $('applyRelease').disabled) return;
   const name = v('updateTarget');
-  const effect = name ? 'เกมที่เปิดอยู่จะรีสตาร์ต' : 'Panel จะรีสตาร์ต';
+  const effect = name ? 'เกมที่เปิดอยู่จะรีสตาร์ต' : 'Panel จะรีสตาร์ตและอาจขัดจังหวะงาน Fleet ที่กำลังทำอยู่';
   if (!confirm('อัปเดต ' + (name || 'Panel') + ' เป็น ' + target + '? ' + effect)) return;
   $('applyRelease').disabled = true;
   await refreshRelease({action:'apply', version:target}, true);

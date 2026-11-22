@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run only on an exclusive GitHub-hosted Ubuntu runner. Network source is a release fixture."""
+import contextlib
 import hashlib
 import http.server
 import importlib.util
@@ -91,7 +92,7 @@ def wait_phase(url, token, phase, context=None):
     raise AssertionError("Timed out waiting for " + phase)
 
 
-with tempfile.TemporaryDirectory() as tmp, http.server.ThreadingHTTPServer(("127.0.0.1", 0), Releases) as server:
+with contextlib.ExitStack() as cleanup, tempfile.TemporaryDirectory() as tmp, http.server.ThreadingHTTPServer(("127.0.0.1", 0), Releases) as server:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     root_url = "http://127.0.0.1:" + str(server.server_port)
     tmp = Path(tmp)
@@ -155,6 +156,37 @@ http.server.HTTPServer(("127.0.0.1", 9082), Bridge).serve_forever()
         ctx.load_cert_chain(m.ETC / "panel-tls/cert.pem", m.ETC / "panel-tls/key.pem")
         url = "https://" + address + ":9081/v1/updates"
         assert (game / "plugins/MineCManagerBridge.jar").read_bytes() == (DIST / "MineCManagerBridge.jar").read_bytes()
+        assert fetch(url, token, context=ctx)[1]["installed"] == "v1.0.0"
+        # Drive the remote node through the public Panel endpoint with a separate client identity.
+        panel_binary = tmp / "panel-client"
+        shutil.copyfile(DIST / "mcm-panel-linux-amd64", panel_binary)
+        panel_binary.chmod(0o755)
+        data = tmp / "panel-data"
+        data.mkdir()
+        env = os.environ | {
+            "MCM_PANEL_CONFIG": str(data / "panel.json"), "MCM_AUDIT_PATH": str(data / "audit.jsonl"),
+            "MCM_VAULT_KEY_FILE": str(data / "vault.key"), "MCM_PANEL_LISTEN": "127.0.0.1:19080",
+            "MCM_CLIENT_CERT": str(m.ETC / "panel-tls/cert.pem"), "MCM_CLIENT_KEY": str(m.ETC / "panel-tls/key.pem"),
+            "MCM_CA_CERT": str(m.ETC / "authority/ca.pem"), "MCM_TEST_REMOTE_TOKEN": token,
+        }
+        subprocess.run([panel_binary, "init"], env=env, check=True)
+        panel = subprocess.Popen([panel_binary], env=env)
+        def stop_client():
+            panel.terminate()
+            panel.wait(timeout=8)
+        cleanup.callback(stop_client)
+        base = "http://127.0.0.1:19080"
+        token = (data / "admin-key.txt").read_text().strip()
+        for attempt in range(40):
+            try:
+                fetch(base + "/v1/nodes", token)
+                break
+            except OSError:
+                time.sleep(.25)
+        registration = {"id": "survival", "url": "https://" + address + ":9081", "token_env": "MCM_TEST_REMOTE_TOKEN"}
+        assert fetch(base + "/v1/nodes", token, registration)[0] == 201
+        assert fetch(base + "/v1/nodes/survival/paper/players", token) == (200, [])
+        url, ctx = base + "/v1/fleet/updates?node=survival", None
     assert fetch(url, token, context=ctx)[1]["installed"] == "v1.0.0"
     subprocess.run([sys.executable, bootstrap, *args], check=True)
     active_tag = "v1.1.0"
