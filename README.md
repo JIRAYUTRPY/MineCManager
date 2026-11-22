@@ -1,5 +1,7 @@
 # MineCManager — Panel-first VM management
 
+[ติดตั้งด้วยสคริปต์เดียวบน Panel VM และ game VM พร้อมปุ่มอัปเดตจาก GitHub Releases](docs/releases-th.md)
+
 เริ่มต้นใหม่: [ติดตั้ง Panel เดียวและเพิ่ม VM ผ่านเว็บ](docs/install-panel-th.md). ใช้ `docker compose up -d --build` แล้วเปิด `/fleet` เพื่อเพิ่ม VM ผ่าน SSH, ดูทรัพยากร, deploy Paper/Purpur/Fabric/Vanilla, จัดการ OS, Cloudflare DNS และ scheduled R2 backups.
 
 Fleet ใช้สิทธิ์ `admin:fleet` ระดับ root แยกจาก Agent API เดิม อ่าน [architecture](docs/fleet-architecture.md) และ [API](api/fleet-openapi.yaml) ก่อนเชื่อม integration. ไม่ต้องติดตั้ง Agent สำหรับ flow ใหม่; legacy Agent/Paper UI ยังอยู่ที่ `/`.

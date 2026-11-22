@@ -1,5 +1,7 @@
 # ติดตั้ง MineCManager แบบ Panel เดียว
 
+[ติดตั้งแบบ systemd ด้วยสคริปต์เดียว จับคู่ VM เกม และอัปเดตจาก GitHub Releases](releases-th.md)
+
 คู่มือนี้ใช้ flow ใหม่: **ติดตั้ง Panel → เพิ่ม VM ผ่าน SSH → ดูทรัพยากร → ติดตั้ง Minecraft** ไม่ต้องติดตั้ง Agent, Go หรือ Java บนเครื่องเกมด้วยตัวเอง
 
 ## 1. ติดตั้ง Panel

@@ -214,6 +214,10 @@ func (s *server) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "forbidden: admin:fleet required", 403)
 			return
 		}
+		if r.URL.Path == "/v1/fleet/updates" || r.URL.Path == "/v1/fleet/update-targets" {
+			s.releaseUpdates(w, r, id)
+			return
+		}
 		if s.fleet == nil {
 			http.Error(w, "fleet not configured", 503)
 			return
