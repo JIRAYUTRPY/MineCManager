@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/JIRAYUTRPY/MineCManager/internal/lock"
 	"github.com/JIRAYUTRPY/MineCManager/internal/transport"
+	"github.com/JIRAYUTRPY/MineCManager/internal/updates"
 	"log"
 	"net"
 	"net/http"
@@ -166,6 +167,7 @@ func main() {
 	}
 	defer lease.Close()
 	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/updates", a.auth(updates.Handle))
 	mux.HandleFunc("/v1/status", a.auth(a.status))
 	mux.HandleFunc("/v1/metrics", a.auth(a.metrics))
 	mux.HandleFunc("/v1/paper/", a.auth(a.paper))

@@ -1,0 +1,108 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - 'setup.py'
+      - 'cmd/**'
+      - 'internal/**'
+      - 'paper-bridge/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'scripts/test-release*.py'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production tag
+        if: github.event_name == 'push'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ $TAG =~ ^v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$ ]]
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: paper-bridge/pom.xml
+      - run: go test ./...
+      - run: python3 scripts/test-release.py
+      - run: mvn -B -ntp -f paper-bridge/pom.xml verify
+      - name: Build installer, binaries and bridge
+        run: |
+          mkdir dist
+          cp setup.py dist/
+          jars=(paper-bridge/target/mcm-paper-bridge-*.jar)
+          test "${#jars[@]}" = 1
+          cp "${jars[0]}" dist/MineCManagerBridge.jar
+          for arch in amd64 arm64; do
+            for component in panel agent; do
+              CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "dist/mcm-$component-linux-$arch" "./cmd/$component"
+            done
+          done
+          cd dist
+          sha256sum MineCManagerBridge.jar mcm-*-linux-* setup.py > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
+          if-no-files-found: error
+
+  installation:
+    needs: package
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [panel, game]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Exercise installation, real systemd services and rollback
+        run: sudo --preserve-env=RUNNER_ENVIRONMENT python3 scripts/test-release-systemd.py dist ${{ matrix.role }}
+      - name: Diagnostics
+        if: failure()
+        run: sudo journalctl --no-pager -u mcm-panel -u mcm-agent -u mcm-release-apply -u mcm-survival -n 80
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [package, installation]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency: release-${{ github.ref }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: dist
+      - name: Publish all verified assets together
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd dist
+          sha256sum -c SHA256SUMS
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            test "$draft" = true || { echo "Release is already published"; exit 1; }
+          else
+            gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" --clobber ./*
+          gh release edit "$TAG" --draft=false

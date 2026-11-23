@@ -11,6 +11,40 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /update-targets:
+    get:
+      summary: Get registered Agent node IDs for release management
+      responses:
+        '200': {description: Array of node IDs. Omit node when targeting the Panel itself.}
+  /updates:
+    parameters:
+      - in: query
+        name: node
+        schema: {type: string}
+        description: Registered node ID. Omit for the Panel VM.
+    get:
+      summary: Read installed version, cached GitHub Latest release and update state
+      responses:
+        '200': {description: Release status}
+        '503': {description: Host has no managed updater}
+    post:
+      summary: Check published releases or queue the exact reviewed upgrade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: {type: string, enum: [check, apply]}
+                version: {type: string, description: "Required for apply, e.g. v1.2.3"}
+      responses:
+        '200': {description: Check completed}
+        '202': {description: Update queued}
+        '403': {description: Requires admin:fleet}
+        '409': {description: "Busy, stale selection or downgrade"}
+        '502': {description: GitHub or Agent unavailable}
   /discover:
     post:
       summary: Discover SSH fingerprint without credentials; verify out of band before enrollment
