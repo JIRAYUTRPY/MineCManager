@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
-	"strings"
 )
 
 func (s *Store) Users(ctx context.Context) ([]User, error) {
@@ -160,7 +159,9 @@ func (s *Store) Roles(ctx context.Context) ([]Role, error) {
 func (s *Store) Assignable() []string {
 	var list []string
 	for _, scope := range s.catalog {
-		if !strings.HasPrefix(scope, "admin:") && scope != "users:manage" {
+		// A key administrator can mint any machine scope. Keep that authority
+		// and human account administration with the bootstrapped owner.
+		if scope != "admin:keys" && scope != "users:manage" {
 			list = append(list, scope)
 		}
 	}

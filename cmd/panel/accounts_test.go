@@ -95,7 +95,8 @@ func TestHumanAccountLifecycle(t *testing.T) {
 	check(request("GET", manage, "", nil, map[string]string{"Authorization": "Bearer " + primary}), 403)
 	check(request("GET", "/v1/nodes", "", nil, map[string]string{"Authorization": "Bearer " + primary}), 200)
 	call("PATCH", manage+"/owner", `{"enabled":false}`, owner, 403)
-	call("POST", roles, `{"name":"infra","scopes":["admin:fleet"]}`, owner, 400)
+	call("POST", roles, `{"name":"keyadmin","scopes":["admin:keys"]}`, owner, 400)
+	call("POST", roles, `{"name":"useradmin","scopes":["users:manage"]}`, owner, 400)
 	call("POST", roles, `{"name":"helper","scopes":["nodes:read","plugins:read"]}`, owner, 201)
 	call("POST", manage, `{"username":"staff","role":"helper","password":"staff test passphrase"}`, owner, 201)
 	const staffLogin = `{"username":"staff","password":"staff test passphrase"}`
@@ -130,7 +131,20 @@ func TestHumanAccountLifecycle(t *testing.T) {
 			t.Fatalf("restored prefs: %s", got)
 		}
 	}
+	call("PUT", roles+"/helper", `{"scopes":["admin:fleet","admin:nodes"]}`, owner, 200)
+	call("GET", "/fleet", "", staff, 200)
+	call("GET", "/admin/nodes", "", staff, 200)
+	call("GET", "/admin/keys", "", staff, 403)
+	call("GET", manage, "", staff, 403)
+	call("PUT", prefs+"jobs", `{"jobStatus":"failed"}`, staff, 200)
+	if !s.fleetGuard("user:staff") {
+		t.Fatal("accepted Fleet role was not recognized at job dispatch")
+	}
 	call("PUT", roles+"/helper", `{"scopes":["plugins:read"]}`, owner, 200)
+	if s.fleetGuard("user:staff") {
+		t.Fatal("removed Fleet scope survived at job dispatch")
+	}
+	call("GET", "/fleet", "", staff, 403)
 	call("GET", "/nodes", "", staff, 403)
 	call("GET", "/v1/nodes", "", staff, 403)
 	call("PATCH", manage+"/staff", `{"role":"viewer"}`, owner, 200)

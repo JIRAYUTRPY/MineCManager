@@ -87,6 +87,8 @@
         box.type = 'checkbox';
         box.value = scope;
         label.append(box, ' ' + scope);
+        if (scope === 'admin:fleet') label.append(' · ควบคุมทุก VM ระดับ root และจัดการ Cloudflare');
+        if (scope === 'admin:nodes') label.append(' · เพิ่มหรือนำ Agent ออกจากทะเบียน');
         return label;
       })
     );
