@@ -2,7 +2,7 @@
 
 Start with `config/panel.example.json`. Generate a 32-byte random key, store its SHA-256 digest in the bootstrap key entry, and retain the original only in your secret manager. `MCM_PANEL_CONFIG` points to the writable config file; its parent must be writable for atomic replacement. `MCM_AUDIT_PATH` points to an append-only-by-convention JSONL log. Both files and their parent directory must be private to the panel user.
 
-Open `http://127.0.0.1:9080/` through an authenticated private connection or HTTPS reverse proxy. The Thai UI supports node service actions, plugins, config editing, backups/restores, key administration, node registration and audit reads. Key permissions are enforced by the API, including when UI controls are visible to a read-only user.
+Open the Panel through a loopback SSH tunnel or HTTPS reverse proxy. On the first visit, use the bootstrap key at `/setup` to create the sole administrator. Subsequent visits use a username and password at `/login`. The administrator creates accounts and roles at `/admin/users` and `/admin/roles`. Pages and API operations enforce the same scopes. Account data, sessions and per-user page preferences live in SQLite next to the Panel configuration. [Thai account guide](users-rbac-th.md)
 
 ## Scopes
 
@@ -14,6 +14,8 @@ Open `http://127.0.0.1:9080/` through an authenticated private connection or HTT
 | configs:read / configs:write | Config content/history / edit and rollback |
 | backups:read / backups:write / backups:restore | Discovery/list / create / verified restore |
 | players:read / inventory:read / inventory:write / resources:read | Paper online players / inventory inspection / guarded slot replacement / live aggregates |
+| admin:fleet | Fleet VM and cloud administration |
+| users:manage | Human account and role administration in the browser |
 | admin:keys | List key metadata, issue, revoke |
 | admin:nodes | Register and remove nodes |
 | audit:read | Paginated local audit log |

@@ -1,0 +1,14 @@
+{{define "users"}}<section><form id="createUser"><h2>สร้างผู้ใช้</h2><div class="grid">
+<label>ชื่อผู้ใช้<input id="newUser" required minlength="2" maxlength="40" autocomplete="off"></label>
+<label>บทบาท<select id="newRole" required></select></label>
+<label>รหัสผ่านเริ่มต้น<input type="password" id="initialPassword" required minlength="12" autocomplete="new-password"></label></div>
+<button class="primary">สร้างผู้ใช้</button></form></section>
+<section><h2>บัญชีผู้ใช้</h2><label>กรองตามบทบาท<select id="roleFilter"></select></label><div class="scroll"><table><thead><tr><th>ชื่อผู้ใช้</th><th>บทบาท</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody id="userList"></tbody></table></div></section>
+<section id="editUserCard" hidden><h2>แก้ไข <span id="editingUser"></span></h2><form id="editUser">
+<label>บทบาท<select id="editRole"></select></label><label><input type="checkbox" id="enabled"> เปิดใช้งานบัญชี</label>
+<label>ตั้งรหัสผ่านใหม่ (ถ้าต้องการ)<input type="password" minlength="12" id="resetPassword" autocomplete="new-password"></label>
+<button class="primary">บันทึกผู้ใช้</button></form></section>{{end}}
+{{define "roles"}}<section><h2>บทบาทที่มีอยู่</h2><label>เลือกบทบาท<select id="selectedRole"></select></label><p id="roleInfo"></p><pre id="roleGrants"></pre></section>
+<section><form id="roleForm"><h2 id="roleFormTitle">สร้างบทบาท</h2><label>ชื่อบทบาท<input id="roleName" required minlength="2" maxlength="40" autocomplete="off"></label>
+<fieldset><legend>สิทธิ์ของบทบาท</legend><div id="grants" class="grid scopes"></div></fieldset>
+<button class="primary" id="saveRole">บันทึกบทบาท</button><button type="button" id="clearRole">สร้างบทบาทใหม่</button></form></section>{{end}}

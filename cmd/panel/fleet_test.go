@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/JIRAYUTRPY/MineCManager/internal/accounts"
 	"github.com/JIRAYUTRPY/MineCManager/internal/fleet"
 	"net/http"
 	"net/http/httptest"
@@ -92,7 +93,12 @@ func TestFleetBrowser(t *testing.T) {
 	defer f.Close()
 	token := "browser-admin-key-12345678901234567890"
 	digest := sha256.Sum256([]byte(token))
-	s := &server{audit: f, cfg: config{Keys: []keyConfig{{ID: "admin", SHA256: hex.EncodeToString(digest[:]), Scopes: []string{"admin:fleet"}}}}}
+	users, e := accounts.Open(filepath.Join(dir, "accounts.sqlite3"), scopes)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { users.Close() })
+	s := &server{accounts: users, audit: f, cfg: config{Keys: []keyConfig{{ID: "bootstrap", SHA256: hex.EncodeToString(digest[:]), Scopes: []string{"admin:keys", "admin:fleet"}}}}}
 	runner := &browserRunner{content: "motd=before\n"}
 	s.fleet = &fleet.Service{Store: store, Runner: runner, Guard: s.fleetGuard, Audit: func(actor, host, action, phase string, status int) error {
 		return s.record(auditEvent{KeyID: actor, NodeID: host, Action: action, Phase: phase, Status: status})

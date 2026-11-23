@@ -16,7 +16,7 @@ docker compose logs --tail=50 panel
 docker compose exec panel cat /data/admin-key.txt
 ```
 
-เปิด **http://127.0.0.1:9080/fleet** แล้วใส่ key จากคำสั่งสุดท้าย Key มีสิทธิ์ root บน VM ที่ลงทะเบียนไว้ ห้ามแชร์กับผู้เล่น
+เปิด **http://127.0.0.1:9080/setup** ใช้ key จากคำสั่งสุดท้ายเพื่อตั้งชื่อและรหัสผ่านผู้ดูแลครั้งเดียว จากนั้นเข้าสู่ระบบด้วยบัญชีแล้วเปิด **เครื่อง VM** ที่ `/fleet` เพื่อเพิ่มเครื่องเกม [บัญชีผู้ใช้และสิทธิ์](users-rbac-th.md)
 
 ถ้า Panel อยู่บน VPS ให้รันคำสั่งนี้บนคอมพิวเตอร์ของคุณ แล้วเปิด URL เดิม:
 
@@ -26,7 +26,7 @@ ssh -N -L 9080:127.0.0.1:9080 YOUR_USER@PANEL_IP
 
 Compose เปิด HTTP เฉพาะ loopback โดยตั้งใจ หากต้องการเข้าผ่าน domain ให้วาง Nginx HTTPS บน host หน้า `127.0.0.1:9080` ดู [คู่มือเดิมส่วน Nginx/TLS](install-th.md) และเปิด `/fleet` ไม่ต้องเปิด port 9080 สู่ Internet การสร้าง DNS ผ่าน Panel ไม่ได้ติดตั้ง certificate ให้
 
-ครั้งแรกระบบสร้าง config, admin key, vault key และ audit ใน named volume `panel-data` ครั้งถัดไปใช้ชุดเดิม **อย่าลบ volume หรือสร้าง vault key ใหม่** หากทำ key หายจะถอดรหัส credentials เดิมไม่ได้
+ครั้งแรกระบบสร้าง config, ฐานบัญชี SQLite, admin key, vault key และ audit ใน named volume `panel-data` ครั้งถัดไปใช้ชุดเดิม **อย่าลบ volume หรือสร้าง vault key ใหม่** หากทำ key หายจะถอดรหัส credentials เดิมไม่ได้
 
 ## 2. เตรียม VM และเพิ่มเครื่อง
 
@@ -121,7 +121,7 @@ DNS token กับ R2 credentials เป็นคนละชุด เว้�
 - Backup ปฏิเสธ symlink/device/special files; เก็บ archive และ `.sha256` ที่ `/var/lib/minecmanager/backups/<server-id>/`
 - **Schedule:** กำหนด interval เป็นชั่วโมง, local retention 1–365 ชุด และ R2 on/off รอบแรกเริ่มหลัง interval นับจากบันทึก เวลาเก็บเป็น UTC ไม่มี cron/timezone editor
 - Panel ต้องเปิดอยู่ ถ้าปิดไปหลายรอบ เมื่อกลับมาจะรันเพียงหนึ่งรอบที่ถึงกำหนด ไม่มีการไล่รันย้อนหลังทุกช่วง ถ้า host มี job ค้างจะข้ามรอบนั้น
-- ถอน/หมดอายุ API key ของผู้สร้าง schedule จะทำให้ schedule หยุด งานที่อนุญาตและเริ่มไปแล้วอาจทำต่อจนจบ
+- งานตามเวลาใช้สิทธิ์ของบัญชีหรือ API key ที่สร้าง schedule การเพิกถอนสิทธิ์ของผู้สร้างจะบล็อกงานใหม่ งานที่อนุญาตและเริ่มไปแล้วอาจทำต่อจนจบ
 - Local retention ลบเฉพาะ backup ที่เกินจำนวนหลังสร้าง/อัปโหลดสำเร็จ **R2 retention ใช้ bucket lifecycle** ตั้ง rule สำหรับ prefix `minecmanager/` ใน Cloudflare เอง [R2 lifecycle docs](https://developers.cloudflare.com/r2/buckets/object-lifecycles/)
 - R2 upload เป็น single PUT URL หมดอายุ 1 ชั่วโมง ไม่มี multipart/resume; เหมาะกับ archive ที่ถ่ายโอนได้ภายในเวลานี้และไม่เกิน single PUT limit ของ R2
 
@@ -137,13 +137,13 @@ Restore R2: เลือก object key จากรายการ R2, ใส่
 
 รุ่นนี้ใช้ worker เดียวต่อ Panel และ lock คำสั่งหนึ่งงานต่อ VM ไม่ใช่ distributed queue งาน deploy ที่นานทำให้งานอื่นรอได้ เก็บ job input/result ใน vault ที่เข้ารหัส ตัด input หลัง job เสร็จ หน้า jobs แสดง 100 รายการล่าสุดและเก็บประวัติสูงสุด 1,000 งาน คำสั่งลับและ file contents ไม่อยู่ใน audit; audit เก็บ actor, target host, job ID/action, intent/result และ status ส่วน stdout/file contents อยู่ใน encrypted job result
 
-Fleet ทุก endpoint ต้องใช้ scope ใหม่ **`admin:fleet`** ซึ่งหมายถึง trusted infrastructure/root administrator รวม credentials, DNS และ backup ของทุก VM ไม่ใช่สิทธิ์ Minecraft ราย server ผู้ใช้ Agent เดิมไม่มี scope นี้โดยอัตโนมัติ สร้าง key จากหน้า `/` โดยใช้ admin key เดิมได้ ห้ามให้ผู้เล่นหรือผู้ดูแล plugin ที่ไม่ควรเข้าถึง OS
+Fleet ทุก endpoint ต้องใช้ scope ใหม่ **`admin:fleet`** ซึ่งหมายถึง trusted infrastructure/root administrator รวม credentials, DNS และ backup ของทุก VM ไม่ใช่สิทธิ์ Minecraft ราย server ผู้ใช้ Agent เดิมไม่มี scope นี้โดยอัตโนมัติ ผู้ดูแลสร้าง key สำหรับ integration จากหน้า `/admin/keys` ได้ ห้ามให้ผู้เล่นหรือผู้ดูแล plugin ที่ไม่ควรเข้าถึง OS
 
 Vault/audit เขียนไม่ได้จะหยุดรับ/dispatch งานใหม่ ไม่ retry mutation อัตโนมัติ กระบวนการทำงานเดียวใช้ process lock ของ Panel เดิม ห้ามรันหลาย replica บน volume เดียว
 
 ## 8. อัปเกรด, สำรอง Panel และถอนการติดตั้ง
 
-หยุด Panel ก่อนทำ snapshot/backup named volume ของ Docker เพื่อให้ config/vault/audit สอดคล้องกัน เก็บทั้ง `panel.json`, `fleet.vault`, `vault.key`, `audit.jsonl`, `admin-key.txt` แบบเข้ารหัสและจำกัดสิทธิ์ **vault key ต้องอยู่ในชุดกู้คืน** การมี vault และ key พร้อมกันเท่ากับเข้าถึง SSH/R2 credentials ได้
+หยุด Panel ก่อนทำ snapshot/backup named volume ของ Docker เพื่อให้ config/vault/audit สอดคล้องกัน เก็บทั้ง `panel.json`, `fleet.vault`, `vault.key`, `audit.jsonl`, `admin-key.txt`, `accounts.sqlite3` แบบเข้ารหัสและจำกัดสิทธิ์ **vault key ต้องอยู่ในชุดกู้คืน** การมี vault และ key พร้อมกันเท่ากับเข้าถึง SSH/R2 credentials ได้
 
 ```bash
 docker compose stop panel

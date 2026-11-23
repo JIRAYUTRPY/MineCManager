@@ -253,7 +253,7 @@ sudo ss -lntp | grep -E ':9080|:9081|:9082|:25565'
 ssh -N -L 9080:127.0.0.1:9080 YOUR_SSH_USER@YOUR_VM_IP
 ```
 
-เปิด `http://127.0.0.1:9080` บนเครื่องที่เปิด tunnel แสดง bootstrap key ด้วย `sudo cat /root/mcm-bootstrap.key` ใน session ส่วนตัว คัดลอกไปเก็บใน password manager และใช้กรอกหน้าเว็บ ห้ามส่ง key ใน URL หรือเปิดหน้า public HTTP แล้วกรอก key
+เปิด `http://127.0.0.1:9080` บนเครื่องที่เปิด tunnel แสดง bootstrap key ด้วย `sudo cat /root/mcm-bootstrap.key` ใน session ส่วนตัว คัดลอกไปเก็บใน password manager และใช้สร้างบัญชีผู้ดูแลครั้งแรกที่ `/setup` หลังจากนั้นใช้ชื่อผู้ใช้และรหัสผ่านที่ `/login` ดู[คู่มือผู้ใช้และสิทธิ์](users-rbac-th.md) ห้ามส่ง key ใน URL หรือเปิดหน้า public HTTP แล้วกรอก key
 
 ทดสอบ API จาก VM ด้วย Bash helper นี้ โดยไม่ใส่ key ลง command history/argument ของ curl:
 
@@ -348,8 +348,8 @@ sudo certbot renew --dry-run
 
 1. เตรียม user `mcm-panel`, binary, `/var/lib/mcm-panel`, `/etc/mcm` และ service unit บน VM ใหม่ แต่ยังไม่ start Panel
 2. หยุด `mcm-panel` บน VM เดิมก่อนคัดลอก state ให้ไม่มี API mutation ระหว่างย้าย; Minecraft/Agent ยังทำงานต่อได้
-3. โอน `/var/lib/mcm-panel/panel.json`, `/var/lib/mcm-panel/audit.jsonl` และ `/etc/mcm/panel.env` ผ่านช่องทางผู้ดูแลที่ปลอดภัย ไม่ส่งผ่าน Git หรือแนบใน issue ไม่ต้องโอนไฟล์ `panel.json.lock`
-4. บน VM ใหม่ตั้ง directory `/var/lib/mcm-panel` เป็น owner `mcm-panel:mcm-panel`, mode 0700; ตั้ง JSON/audit เป็น owner เดียวกัน mode 0600 และ `/etc/mcm/panel.env` เป็น root:root mode 0600 ถ้ายังไม่มี audit file ให้ service สร้างเอง ไม่ทับ audit ที่มีอยู่ด้วยไฟล์ว่าง
+3. โอน `/var/lib/mcm-panel/panel.json`, `/var/lib/mcm-panel/audit.jsonl`, `/var/lib/mcm-panel/accounts.sqlite3` (ถ้ามี) และ `/etc/mcm/panel.env` ผ่านช่องทางผู้ดูแลที่ปลอดภัย ไม่ส่งผ่าน Git หรือแนบใน issue ไม่ต้องโอนไฟล์ `panel.json.lock`
+4. บน VM ใหม่ตั้ง directory `/var/lib/mcm-panel` เป็น owner `mcm-panel:mcm-panel`, mode 0700; ตั้ง JSON/audit/SQLite เป็น owner เดียวกัน mode 0600 และ `/etc/mcm/panel.env` เป็น root:root mode 0600 ถ้ายังไม่มี audit file ให้ service สร้างเอง ไม่ทับ audit ที่มีอยู่ด้วยไฟล์ว่าง
 5. ออกและติดตั้ง certificates ตามหัวข้อถัดไป แล้วแก้ node URL/Panel env บนเครื่องใหม่ก่อนเริ่ม service
 6. ตรวจ API ผ่าน loopback ของ Panel ใหม่ จากนั้นย้าย DNS/Nginx และตรวจ HTTPS จาก client หลังผ่านจึง `sudo systemctl disable mcm-panel` บน VM เดิมเพื่อป้องกันเปิด controller เก่ากลับมา
 
@@ -417,7 +417,7 @@ HTTP API ของ bridge ยังอยู่บน loopback VM เกม ไ�
 
 ## 10. ตรวจรับก่อนเปิดใช้งาน
 
-- Login หน้าเว็บผ่าน HTTPS; key อ่านอย่างเดียวต้องสั่ง restart/แก้ inventory ไม่ได้
+- ล็อกอินหน้าเว็บผ่าน HTTPS ด้วยบัญชี viewer และตรวจว่าทั้งบัญชีนี้และ API key อ่านอย่างเดียวถูกปฏิเสธเมื่อสั่ง restart หรือแก้ inventory
 - Agent คุมได้เฉพาะ `minecraft.service`; ตรวจ Polkit rule และลอง action ที่ไม่อนุญาตบน unit ทดสอบที่ไม่มีผลกับงานจริง
 - หยุด → แก้ config → rollback → เริ่ม ต้องทำงานครบ
 - ทดสอบ backup/restore **บนโลกทดสอบ** ตรวจว่า world/plugins กลับมา และ Minecraft เขียนข้อมูลต่อได้
@@ -432,7 +432,7 @@ HTTP API ของ bridge ยังอยู่บน loopback VM เกม ไ�
 
 หลัง bootstrap ทำงาน ให้ใช้หน้า Administration สร้าง key ตามหน้าที่ เช่น `nodes:read,plugins:read` พร้อม node restriction `minecraft-01` ทดสอบ key ใหม่นี้ด้วยการอ่าน status และลอง POST action: ต้องได้ 403 โดยไม่มีการสั่งงาน Agent
 
-เมื่อต้องเปลี่ยน admin key ให้สร้าง key ใหม่ที่มี `admin:keys` และ scopes ที่ต้องใช้ เก็บ token ที่แสดงครั้งเดียวใน password manager ทดสอบ login/API ด้วย key ใหม่ในอีก session แล้วจึง revoke key เก่า ห้าม revoke key ที่กำลังใช้โดยยังไม่เก็บและทดสอบ key ใหม่ หลัง revoke bootstrap สำเร็จ ไฟล์ `/root/mcm-bootstrap.key` จะใช้ login ไม่ได้อีก ให้จัดการไฟล์นี้ตามนโยบาย secrets ของคุณ
+เมื่อต้องเปลี่ยน admin key ให้สร้าง key ใหม่ที่มี `admin:keys` และ scopes ที่ต้องใช้ เก็บ token ที่แสดงครั้งเดียวใน password manager ทดสอบเรียก API ด้วย key ใหม่ แล้วจึง revoke key เก่า ห้าม revoke key ที่กำลังใช้โดยยังไม่เก็บและทดสอบ key ใหม่ หลัง revoke bootstrap สำเร็จ key ในไฟล์ `/root/mcm-bootstrap.key` จะใช้เรียก API ไม่ได้อีก ให้จัดการไฟล์นี้ตามนโยบาย secrets ของคุณ
 
 Agent token และ Paper bridge token เปลี่ยนผ่าน env files คนละขั้นตอนกับ Panel key:
 

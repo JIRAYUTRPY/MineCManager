@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/JIRAYUTRPY/MineCManager/internal/accounts"
 	"github.com/JIRAYUTRPY/MineCManager/internal/fleet"
 	"github.com/JIRAYUTRPY/MineCManager/internal/lock"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -41,6 +43,8 @@ type config struct {
 	Nodes []nodeConfig `json:"nodes"`
 }
 type server struct {
+	accounts    *accounts.Store
+	attempts    loginLimiter
 	cfg         config
 	client      *http.Client
 	audit       *os.File
@@ -118,6 +122,9 @@ func validate(c config) error {
 	return nil
 }
 func (s *server) authorize(r *http.Request, scope string) (string, bool) {
+	if u := identity(r); u != nil {
+		return "user:" + u.Name, u.Has(scope)
+	}
 	header := r.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer ") {
 		return "", false
@@ -144,6 +151,10 @@ func (s *server) authorize(r *http.Request, scope string) (string, bool) {
 	return "", false
 }
 func (s *server) allowedNode(key, node string) bool {
+	// Human roles grant node scopes across the Panel. API keys may restrict node IDs.
+	if strings.HasPrefix(key, "user:") {
+		return true
+	}
 	for _, k := range s.cfg.Keys {
 		if k.ID == key {
 			if len(k.Nodes) == 0 {
@@ -203,7 +214,7 @@ func requestID() string {
 	}
 	return hex.EncodeToString(b[:])
 }
-func (s *server) handle(w http.ResponseWriter, r *http.Request) {
+func (s *server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if strings.HasPrefix(r.URL.Path, "/v1/fleet/") {
@@ -434,7 +445,16 @@ func main() {
 	if e != nil {
 		log.Fatal(e)
 	}
-	s := &server{cfg: cfg, audit: f, configPath: path, client: client}
+	dbPath := os.Getenv("MCM_ACCOUNTS_DB")
+	if dbPath == "" {
+		dbPath = filepath.Join(filepath.Dir(path), "accounts.sqlite3")
+	}
+	users, e := accounts.Open(dbPath, scopes)
+	if e != nil {
+		log.Fatal("open panel account database: ", e)
+	}
+	defer users.Close()
+	s := &server{cfg: cfg, audit: f, configPath: path, client: client, accounts: users}
 	if vaultPath := os.Getenv("MCM_FLEET_VAULT"); vaultPath != "" {
 		key, e := os.ReadFile(os.Getenv("MCM_VAULT_KEY_FILE"))
 		if e != nil {
@@ -460,6 +480,13 @@ func main() {
 }
 
 func (s *server) fleetGuard(actor string) bool {
+	if name, ok := strings.CutPrefix(actor, "user:"); ok {
+		if s.accounts == nil {
+			return false
+		}
+		u, err := s.accounts.User(context.Background(), name)
+		return err == nil && u != nil && u.Has("admin:fleet")
+	}
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
 	for _, k := range s.cfg.Keys {

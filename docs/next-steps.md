@@ -11,7 +11,7 @@ This PR completes the implemented **VM management workflow** within the constrai
 | Backup and restore | Complete stopped-root copy, manifest verification, previous-root retention; corruption/custom-world tests |
 | Remote transport | TLS 1.3 mTLS agent; trusted-CA client and missing-client-certificate tests |
 | Audit | Fsynced intent before dispatch, result before success; audit failure blocks dispatch tests |
-| Admin interface | Thai key-based UI connected to API; optional real-binary Chromium smoke |
+| Admin interface | Thai multi-page UI, SQLite users, role scopes and per-user selections with real-binary Chromium smoke tests |
 | Paper integration | Optional online player inventory/item API and bounded resource aggregates; Java validation tests and scoped Go proxy tests |
 | API contract | OpenAPI route/scope/request/response reference |
 | Operations | Build/run instructions and service templates; no live VM deployment |
@@ -19,7 +19,7 @@ This PR completes the implemented **VM management workflow** within the constrai
 ## Separate product scope still open
 
 - Offline player inventory, player self-service identity binding, full persistent world/container indexing and event automation.
-- MongoDB/PostgreSQL analytics, user accounts/SSO, tenant boundaries and a horizontally scalable control plane.
+- MongoDB/PostgreSQL analytics, SSO, tenant boundaries and a horizontally scalable control plane.
 - Off-host encrypted backup replication/automated retention, durable async jobs and transactional crash recovery.
 - Historical heartbeat/monitoring, centralized immutable audit storage and alerting.
 - Validation on a real Ubuntu/systemd/Paper host, reverse proxy and organization-specific firewall/PKI. The local automated smoke does not prove these deployment integrations.

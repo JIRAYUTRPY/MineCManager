@@ -26,7 +26,7 @@ Panel ฟังที่ `127.0.0.1:9080` อ่าน bootstrap key บนเ�
 ssh -L 9080:127.0.0.1:9080 ops@panel-vm
 ```
 
-เปิด `http://127.0.0.1:9080/fleet` เพิ่ม game VM ผ่าน SSH แล้วติดตั้ง **Paper 1.21.11** ด้วย Server ID ที่ต้องการ เช่น `survival` หากมี Paper รุ่นนี้ที่สร้างจาก Fleet อยู่แล้วให้ใช้ ID เดิม ขั้นตอนติดตั้งเกมและ EULA อยู่ใน [คู่มือ Fleet](install-panel-th.md)
+เปิด `http://127.0.0.1:9080/setup` กรอก bootstrap key ตั้งชื่อและรหัสผ่านผู้ดูแลครั้งแรก จากนั้นเข้า `/fleet` เพื่อเพิ่ม game VM ผ่าน SSH แล้วติดตั้ง **Paper 1.21.11** ด้วย Server ID ที่ต้องการ เช่น `survival` หากมี Paper รุ่นนี้ที่สร้างจาก Fleet อยู่แล้วให้ใช้ ID เดิม ขั้นตอนติดตั้งเกมและ EULA อยู่ใน [คู่มือ Fleet](install-panel-th.md)
 
 ## 2. จับคู่ VM เกม
 
@@ -40,11 +40,11 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 
 ถ้าใช้ SSH key คนละชุดกับเครื่อง Panel ให้รัน `pair survival 10.20.0.15` โดยละ `--ssh` แล้วส่งไฟล์ `pair.json` ที่แสดงและ `setup.py` ให้ผู้ดูแล VM เกมผ่านช่องทางส่วนตัว บน game VM รัน `sudo python3 setup.py game /root/pair.json` เก็บ enrollment bundle สิทธิ์ 0600 เพราะมี private key และ token การรันติดตั้งซ้ำด้วย role/ID เดิมจะคืนสถานะปัจจุบัน
 
-เข้า `/` แล้วกด **เชื่อมต่อ / โหลด nodes → survival → ผู้เล่นออนไลน์** ด้วย key ที่มี `nodes:read` และ `players:read` ผล `[]` หมายถึงถึง Paper แล้วและขณะนั้นไม่มีใครออนไลน์ ตัว bridge ใช้พอร์ตตายตัว จึงจับคู่ Paper ได้หนึ่ง instance ต่อ game VM ผ่านวิธีนี้ ไฟล์โลกและ backup ของ Fleet ยังจัดการผ่าน `/fleet`
+ล็อกอินแล้วเข้า `/nodes/players` เลือก **survival → ผู้เล่นออนไลน์** ด้วยบัญชีที่มี `nodes:read` และ `players:read` ผล `[]` หมายถึงถึง Paper แล้วและขณะนั้นไม่มีใครออนไลน์ ตัว bridge ใช้พอร์ตตายตัว จึงจับคู่ Paper ได้หนึ่ง instance ต่อ game VM ผ่านวิธีนี้ ไฟล์โลกและ backup ของ Fleet ยังจัดการผ่าน `/fleet`
 
 ## 3. ตรวจและอัปเดต
 
-เปิด **/fleet → อัปเดต** ด้วยสิทธิ์ `admin:fleet` เลือก Panel หรือชื่อ node แล้วกด **ตรวจ GitHub Releases** หน้าเว็บแสดงเวอร์ชันที่ติดตั้ง เวอร์ชัน Latest เวลาเช็กล่าสุด และผลของงาน ปุ่ม **อัปเดต** ใช้ได้เมื่อมีเวอร์ชันใหม่กว่า Timer บนแต่ละ VM ตรวจทุก 6 ชั่วโมงโดยมีเวลาสุ่มเพิ่มสูงสุด 15 นาที การติดตั้งเกิดขึ้นเมื่อผู้ดูแลกดปุ่ม
+เปิด **อัปเดตระบบ** ที่ `/fleet/updates` ด้วยสิทธิ์ `admin:fleet` เลือก Panel หรือชื่อ node แล้วกด **ตรวจ GitHub Releases** หน้าเว็บแสดงเวอร์ชันที่ติดตั้ง เวอร์ชัน Latest เวลาเช็กล่าสุด และผลของงาน ปุ่ม **อัปเดต** ใช้ได้เมื่อมีเวอร์ชันใหม่กว่า Timer บนแต่ละ VM ตรวจทุก 6 ชั่วโมงโดยมีเวลาสุ่มเพิ่มสูงสุด 15 นาที การติดตั้งเกิดขึ้นเมื่อผู้ดูแลกดปุ่ม
 
 ตัวตรวจอ่าน `/releases/latest` ของ repo นี้เท่านั้น รับเฉพาะ published stable release ที่ tag มีรูปแบบ `vMAJOR.MINOR.PATCH` เมื่อไม่มี release จะแสดงว่าไม่มีรุ่นให้อัปเดต เมื่อ GitHub ใช้งานไม่ได้จะแสดงข้อผิดพลาด ก่อนติดตั้ง worker ตรวจว่า release ยังตรงกับรุ่นที่กด แล้วตรวจ GitHub asset digest และ `SHA256SUMS` ก่อนหยุด service
 
@@ -54,7 +54,7 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 |---|---|
 | `/opt/minecmanager/releases/<tag>` และ `current` | โปรแกรม, bridge และ installer แต่ละรุ่น |
 | `/etc/mcm-managed` | CA, TLS, node token และการจับคู่ ควรสำรองแบบเข้ารหัส |
-| `/var/lib/mcm-managed-panel` | config, API keys, audit, Fleet vault และ vault key |
+| `/var/lib/mcm-managed-panel` | config, API keys, SQLite บัญชีผู้ใช้, audit, Fleet vault และ vault key |
 | `/var/lib/mcm-release` | สถานะการตรวจและงานอัปเดต |
 | `/srv/minecmanager/<id>` | world, plugins และ config ของเกม |
 
@@ -62,7 +62,7 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 
 ### เครื่องที่ติดตั้งด้วย Compose หรือ systemd เดิม
 
-เลือก VM ใหม่สำหรับการติดตั้งแบบ managed หรือย้ายใน maintenance window ตัว installer ตรวจ service/port ที่มีเจ้าของอยู่และหยุดก่อนติดตั้ง สำหรับ Compose เดิม ให้หยุด Panel เดิม สำรอง named volume ทั้งชุดก่อนย้าย คัดลอก `panel.json`, `fleet.vault`, `vault.key`, `audit.jsonl` และ `admin-key.txt` จาก `/data` มาไว้ใน `/var/lib/mcm-managed-panel` และให้ user `mcm-panel` เป็นเจ้าของไฟล์ด้วยสิทธิ์ 0600 ถ้ามี node เดิม ให้ตั้ง env ของ token และ path ของ CA/client certificate ใน `/etc/mcm-managed/panel-local.env` (root:root, 0600) ก่อนเริ่ม service กรณีใช้หลาย CA ให้จัด trust bundle และ client certificate ที่ทุก Agent ยอมรับ มีเพียง instance เดียวที่ควรเขียนข้อมูลชุดนี้ การย้ายจาก agent/manual bridge เดิมให้สำรอง service, secret และ JAR เดิมก่อน เครื่องที่ใช้ Compose ต่อยังใช้ UI และจัดการ node แบบ managed ได้ ปุ่มอัปเดตตัว Panel เองต้องมี managed updater บน host
+เลือก VM ใหม่สำหรับการติดตั้งแบบ managed หรือย้ายใน maintenance window ตัว installer ตรวจ service/port ที่มีเจ้าของอยู่และหยุดก่อนติดตั้ง สำหรับ Compose เดิม ให้หยุด Panel เดิม สำรอง named volume ทั้งชุดก่อนย้าย คัดลอก `panel.json`, `fleet.vault`, `vault.key`, `audit.jsonl`, `admin-key.txt` และ `accounts.sqlite3` (ถ้าเปิดใช้บัญชีแล้ว) จาก `/data` มาไว้ใน `/var/lib/mcm-managed-panel` และให้ user `mcm-panel` เป็นเจ้าของไฟล์ด้วยสิทธิ์ 0600 ถ้ามี node เดิม ให้ตั้ง env ของ token และ path ของ CA/client certificate ใน `/etc/mcm-managed/panel-local.env` (root:root, 0600) ก่อนเริ่ม service กรณีใช้หลาย CA ให้จัด trust bundle และ client certificate ที่ทุก Agent ยอมรับ มีเพียง instance เดียวที่ควรเขียนข้อมูลชุดนี้ การย้ายจาก agent/manual bridge เดิมให้สำรอง service, secret และ JAR เดิมก่อน เครื่องที่ใช้ Compose ต่อยังใช้ UI และจัดการ node แบบ managed ได้ ปุ่มอัปเดตตัว Panel เองต้องมี managed updater บน host
 
 ## 4. ออก release
 
