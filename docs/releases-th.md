@@ -96,4 +96,12 @@ workflow **Release** build Panel และ Agent สำหรับ amd64/arm64,
 
 เมื่อ CI ผ่าน หน้า Assets ควรมีไฟล์แนบ 7 ไฟล์ ได้แก่ `setup.py`, `SHA256SUMS`, `MineCManagerBridge.jar` และ binary `mcm-{panel,agent}-linux-{amd64,arm64}` ทั้งสี่ไฟล์ การ merge PR จะตรวจชุดติดตั้ง ส่วนการเผยแพร่เกิดจาก tag หรือ Release ใหม่ การแก้ workflow มีผลกับรุ่นที่สร้างจาก commit ที่รวมการแก้ไขแล้ว
 
-สำหรับ Panel แบบ Compose ที่ build จาก repo นี้ ให้อัปเดต checkout ไปยัง tag ที่ต้องการแล้วรัน `docker compose up -d --build panel` จากไดเรกทอรีที่ใช้ติดตั้งเดิม เพื่อใช้ volume เดิม คู่มือติดตั้งที่ใช้ `setup.py panel` จะติดตั้ง updater และ socket ให้บน Panel VM
+สำหรับ Panel แบบ Compose ที่ build จาก repo นี้ เมื่อเลือก **Panel** หน้าอัปเดตจะมีลิงก์ไป GitHub Latest และคำสั่งสำหรับโฮสต์ เลือก tag ที่เผยแพร่แล้วจากหน้า Releases แล้วรันจากไดเรกทอรี Compose เดิม ตัวอย่างสำหรับ `0.0.1`
+
+```bash
+git fetch origin tag 0.0.1
+git switch --detach refs/tags/0.0.1
+docker compose up -d --build panel
+```
+
+หากตอนติดตั้งใช้ `docker compose -p` ให้ใช้ project name เดิมเพื่อใช้ volume เดิม วิธีนี้ build จาก source ของ tag จึงใช้ได้แม้รุ่นนั้นมีเพียง source archive ส่วนเครื่องเกมที่จับคู่และติดตั้ง updater ด้วย `setup.py` ยังกดอัปเดตจาก Panel ได้ คู่มือติดตั้งที่ใช้ `setup.py panel` จะติดตั้ง updater และ socket ให้บน Panel VM

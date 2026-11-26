@@ -52,20 +52,30 @@ func Parse(r *http.Request) (Request, error) {
 	return q, errors.New("use check or apply with the selected stable version")
 }
 
+func unavailable(q Request, err error) Response {
+	if errors.Is(err, os.ErrNotExist) && os.Getenv("MCM_PANEL_DEPLOYMENT") == "compose" {
+		if q.Action == "status" {
+			return Response{Code: http.StatusOK, Data: json.RawMessage(`{"update_method":"compose","available":false}`)}
+		}
+		return Response{Code: http.StatusConflict, Error: "update the Compose Panel on its host with docker compose up -d --build panel"}
+	}
+	message := "cannot connect to the release updater; check mcm-release.socket on the selected VM"
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		message = "release updater socket is missing; check mcm-release.socket on a setup.py installation"
+	case errors.Is(err, syscall.ECONNREFUSED):
+		message = "release updater socket is not listening; check systemctl status mcm-release.socket on the selected VM"
+	case errors.Is(err, os.ErrPermission):
+		message = "service cannot access the release updater socket; check its group and permissions on the selected VM"
+	}
+	return Response{Code: http.StatusServiceUnavailable, Error: message}
+}
+
 func Local(ctx context.Context, q Request) Response {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", "/run/mcm-release.sock")
 	if err != nil {
-		message := "cannot connect to the release updater; check mcm-release.socket on the selected VM"
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-			message = "release updater socket is missing; check mcm-release.socket on a setup.py installation. A Compose Panel uses docker compose to update itself"
-		case errors.Is(err, syscall.ECONNREFUSED):
-			message = "release updater socket is not listening; check systemctl status mcm-release.socket on the selected VM"
-		case errors.Is(err, os.ErrPermission):
-			message = "service cannot access the release updater socket; check its group and permissions on the selected VM"
-		}
-		return Response{Code: 503, Error: message}
+		return unavailable(q, err)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(45 * time.Second))

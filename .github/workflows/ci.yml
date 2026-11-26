@@ -56,6 +56,20 @@ jobs:
           test -s /tmp/fleet.html
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9080/v1/fleet/hosts)" = 403
           docker compose exec -T panel test -s /data/admin-key.txt
+          python3 - <<'PYTEST'
+          import json, subprocess, urllib.error, urllib.request
+          token = subprocess.check_output(["docker", "compose", "exec", "-T", "panel", "cat", "/data/admin-key.txt"], text=True).strip()
+          url = "http://127.0.0.1:9080/v1/fleet/updates"
+          headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+          with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as reply:
+              assert json.load(reply) == {"update_method": "compose", "available": False}
+          try:
+              urllib.request.urlopen(urllib.request.Request(url, b'{"action":"apply","version":"0.0.2"}', headers))
+          except urllib.error.HTTPError as error:
+              assert error.code == 409 and b"docker compose" in error.read()
+          else:
+              raise AssertionError("Compose Panel accepted an in-container update")
+          PYTEST
           docker compose restart panel
           sleep 3
           curl -fsS http://127.0.0.1:9080/fleet > /dev/null

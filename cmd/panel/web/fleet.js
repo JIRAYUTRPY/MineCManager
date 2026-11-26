@@ -68,6 +68,9 @@ function clearRelease() {
   ++releaseSequence;
   clearTimeout(updateTimer);
   shownRelease = null;
+  $('composeUpdate').hidden = true;
+  $('managedUpdate').hidden = false;
+  $('releaseInfo').textContent = 'กำลังโหลดสถานะ';
   $('applyRelease').disabled = true;
 }
 function updatePath() {
@@ -83,6 +86,14 @@ async function refreshRelease(data, reportError = false) {
     const s = await api(path, data ? 'POST' : 'GET', data);
     if (seq !== releaseSequence || path !== updatePath()) return;
     shownRelease = s;
+    const compose = !v('updateTarget') && s.update_method === 'compose';
+    $('composeUpdate').hidden = !compose;
+    $('managedUpdate').hidden = compose;
+    if (compose) {
+      $('releaseInfo').textContent = 'Panel นี้อัปเดตผ่าน Docker Compose บน Panel VM';
+      $('applyRelease').disabled = true;
+      return;
+    }
     const labels = {
       installed: 'ติดตั้งแล้ว',
       queued: 'รอดำเนินการ',

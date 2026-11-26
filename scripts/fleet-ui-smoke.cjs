@@ -18,6 +18,7 @@ const { chromium } = require('playwright');
       const request = route.request();
       const node = new URL(request.url()).searchParams.get('node');
       const input = request.postDataJSON();
+      if (!node && !input) return route.fulfill({ json: { update_method: 'compose', available: false } });
       if (input) {
         if (node !== 'survival') throw Error('Update was sent to the wrong target');
         if (input.action === 'check') patchChecked = true;
@@ -41,6 +42,10 @@ const { chromium } = require('playwright');
     const base = process.env.MCM_FLEET_URL;
     await authenticate(page, base, owner, process.env.MCM_UI_KEY);
     await page.goto(base + '/fleet/updates');
+    await page.locator('#composeUpdate').waitFor({ state: 'visible' });
+    if (await page.locator('#applyRelease').isVisible()) throw Error('Compose showed the host update button');
+    if (!(await page.locator('#composeUpdate').innerText()).includes('docker compose up -d --build panel'))
+      throw Error('Compose rebuild instructions missing');
     await page.locator('#updateTarget').selectOption('survival');
     await page.waitForFunction(() => document.querySelector('#releaseInfo').textContent.includes('v1.0.0'));
     if (await page.locator('#applyRelease').isEnabled()) throw Error('Up-to-date install allowed update');
