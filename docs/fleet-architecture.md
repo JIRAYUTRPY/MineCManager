@@ -1,6 +1,6 @@
 # Fleet control plane (v0.3)
 
-The panel-only Compose deployment serves the Thai UI at `/fleet`. Existing `/` and `/v1/nodes` retain their scoped Agent/Paper behavior. Fleet does not auto-register its servers with that API: it is an additional privileged host control plane.
+The panel-only Compose deployment serves the Thai UI at `/fleet`. After account login, the overview links to the scoped Agent/Paper pages at `/nodes`; integrations use `/v1/nodes`. Fleet does not auto-register its servers with that API: it is an additional privileged host control plane.
 
 ## Trust and execution
 
@@ -17,6 +17,7 @@ The panel-only Compose deployment serves the Thai UI at `/fleet`. Existing `/` a
 | Path | Purpose |
 |---|---|
 | Panel `/data/panel.json` | Existing API key digests and Agent registrations |
+| Panel `/data/accounts.sqlite3` | Human accounts, role grants, sessions and per-user page selections |
 | Panel `/data/fleet.vault` | Encrypted host/cloud/job/schedule state |
 | Panel `/data/vault.key` | Raw 32-byte AES key, never regenerate for an existing vault |
 | Panel `/data/admin-key.txt` | Initial administrative credential; protect/rotate after setup |

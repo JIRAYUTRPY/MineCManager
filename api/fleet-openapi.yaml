@@ -4,12 +4,14 @@ info:
   version: 0.3.0
   description: |
     Privileged panel-only control plane. Every route requires admin:fleet, granting
-    root access across all enrolled hosts and cloud credentials. Separate from
+    root access across all enrolled hosts and cloud credentials. Browser session
+    mutations require same origin and the X-MCM-Request header with value "1". Separate from
     legacy Agent routes in openapi.yaml. Job inputs/results are encrypted at rest.
 servers:
   - url: /v1/fleet
 security:
   - bearerAuth: []
+  - panelSession: []
 paths:
   /update-targets:
     get:
@@ -250,6 +252,7 @@ components:
                       uptime_seconds: {type: number}
                       os: {type: string, description: Contents of /etc/os-release}
   securitySchemes:
+    panelSession: {type: apiKey, in: cookie, name: mcm_session}
     bearerAuth: {type: http, scheme: bearer}
   parameters:
     ID: {name: id, in: path, required: true, schema: {type: string}}

@@ -1,0 +1,269 @@
+:root {
+  color-scheme: dark;
+  font:
+    15px/1.55 Inter,
+    system-ui,
+    sans-serif;
+  background: #111416;
+  color: #edf1f1;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+a {
+  color: #a3e8d7;
+  text-underline-offset: 3px;
+}
+.shell {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  min-height: 100vh;
+}
+aside {
+  padding: 26px 20px;
+  background: #181d20;
+  border-right: 1px solid #313a3c;
+}
+.brand {
+  display: block;
+  color: #e6fff6;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.06em;
+  text-decoration: none;
+}
+.nav-group {
+  margin-top: 22px;
+}
+.nav-group p,
+header span,
+small {
+  color: #a7b6b6;
+  font-size: 13px;
+}
+.nav-group p {
+  margin: 0 8px 4px;
+  font-weight: 650;
+}
+.nav-group a {
+  display: block;
+  padding: 5px 9px;
+  color: #c3cece;
+  text-decoration: none;
+  border-radius: 6px;
+}
+.nav-group a:hover,
+.nav-group a[aria-current] {
+  background: #293d39;
+  color: #d8fff4;
+}
+.identity {
+  margin-top: 24px;
+  border-top: 1px solid #374040;
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+main {
+  width: 100%;
+  max-width: 1080px;
+  padding: clamp(20px, 4vw, 52px);
+  min-width: 0;
+}
+h1 {
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.25;
+  margin: 4px 0 18px;
+  letter-spacing: -0.035em;
+}
+h2 {
+  font-size: 19px;
+  margin: 0 0 12px;
+}
+section {
+  padding: 20px;
+  background: #1b2124;
+  border: 1px solid #343e41;
+  border-radius: 10px;
+  margin: 0 0 16px;
+}
+p {
+  margin: 8px 0 14px;
+}
+label {
+  display: block;
+  margin: 10px 0;
+  color: #d1dcdc;
+}
+input,
+select,
+button,
+textarea {
+  font: inherit;
+  color: inherit;
+  border: 1px solid #58666a;
+  border-radius: 6px;
+  padding: 8px 11px;
+  background: #13191b;
+  max-width: 100%;
+}
+input:not([type='checkbox']),
+select,
+textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+input[type='checkbox'] {
+  vertical-align: middle;
+}
+textarea {
+  min-height: 130px;
+  font-family: ui-monospace, monospace;
+}
+button {
+  cursor: pointer;
+  margin: 4px 6px 4px 0;
+  background: #303b3e;
+}
+.primary {
+  background: #abe7d5;
+  border-color: #abe7d5;
+  color: #102b23;
+  font-weight: 650;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #80d7c2;
+  outline-offset: 2px;
+}
+details {
+  margin: 14px 0;
+}
+summary {
+  cursor: pointer;
+}
+.row,
+.grid,
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 10px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+}
+.feature {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid #34403f;
+  padding: 10px 0;
+  text-decoration: none;
+}
+.feature span {
+  color: #91aba7;
+}
+.auth {
+  margin: 9vh auto;
+  max-width: 510px;
+}
+.auth .brand {
+  margin-bottom: 18px;
+}
+.auth h1 {
+  font-size: 28px;
+}
+.auth form {
+  margin-top: 18px;
+}
+#message:not(:empty) {
+  padding: 9px 12px;
+  border-left: 3px solid #7bc6b0;
+  margin: 10px 0;
+}
+#message[data-error='true'],
+.warn {
+  color: #ffc49a;
+}
+.output:has(pre:empty) {
+  display: none;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 440px;
+  overflow: auto;
+}
+.badge {
+  padding: 12px;
+  border: 1px solid #3e4b4d;
+  border-radius: 6px;
+}
+.scroll {
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #364245;
+  padding: 8px;
+  overflow-wrap: anywhere;
+}
+.scopes label {
+  overflow-wrap: anywhere;
+}
+button[aria-pressed='true'] {
+  border-color: #99ddc9;
+}
+@media (max-width: 760px) {
+  .shell {
+    display: block;
+  }
+  aside {
+    padding: 14px;
+    border-right: 0;
+    border-bottom: 1px solid #313a3c;
+  }
+  nav {
+    display: flex;
+    gap: 10px;
+    overflow: auto;
+    max-height: 170px;
+  }
+  .nav-group {
+    margin-top: 8px;
+    flex: 0 0 auto;
+  }
+  .nav-group a {
+    font-size: 13px;
+  }
+  .identity {
+    margin-top: 10px;
+    padding-top: 6px;
+  }
+  .auth {
+    margin: 4vh auto;
+  }
+  main {
+    padding: 18px;
+  }
+  section {
+    padding: 15px;
+  }
+}

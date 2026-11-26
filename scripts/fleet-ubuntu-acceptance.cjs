@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const { setTimeout: delay } = require('node:timers/promises');
+const {authenticate, owner} = require('./browser-account.cjs');
 const { chromium } = require('playwright');
 
 async function acceptance(page, dir, server) {
@@ -34,9 +35,8 @@ async function acceptance(page, dir, server) {
     throw Error(action + ' timed out');
   }
 
+  await authenticate(page, base, owner, token);
   await page.goto(base + '/fleet');
-  await page.locator('#key').fill(token);
-  await page.locator('#connect').click();
   await page.locator('#hosts summary').click();
   await page.locator('#hostID').fill(host);
   await page.locator('#address').fill('127.0.0.1');

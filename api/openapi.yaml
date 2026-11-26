@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: MineCManager VM Control Plane
   version: 0.2.0
-  description: Panel API. Bearer scopes and optional node restrictions. Mutations
+  description: Panel API. Service keys support scopes and optional node restrictions. Human sessions use role scopes. All cookie-authenticated mutations require same origin and the X-MCM-Request header with value "1". Mutations
     require durable audit intent. Agent shares the node suffix routes and uses its
     separate bearer token; remote agents require mTLS. Unknown mutation outcomes must
     be inspected before retry.
@@ -10,6 +10,7 @@ servers:
 - url: http://127.0.0.1:9080
 security:
 - bearerAuth: []
+- panelSession: []
 paths:
   /v1/nodes:
     get:
@@ -1207,12 +1208,587 @@ paths:
         in: path
         required: true
         schema: *id001
+  /v1/auth/session:
+    get:
+      summary: Read initialization status and the current account
+      tags:
+      - Panel accounts
+      security: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  needs_setup:
+                    type: boolean
+                  user:
+                    type: object
+                    nullable: true
+                    description: PanelAccount for an authenticated session, otherwise null.
+                    properties:
+                      username:
+                        $ref: '#/components/schemas/PanelUsername'
+                      role:
+                        $ref: '#/components/schemas/PanelRole'
+                      scopes:
+                        $ref: '#/components/schemas/PanelScopes'
+                      enabled:
+                        type: boolean
+                additionalProperties: false
+                required:
+                - needs_setup
+                - user
+        '503':
+          description: Persistence or audit unavailable
+  /v1/auth/bootstrap:
+    post:
+      summary: Use the configured bootstrap key to create the sole administrator
+      tags:
+      - Panel accounts
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelBootstrap'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets or expires the Panel session cookie.
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '409':
+          description: Already initialized or conflicting account or role
+        '429':
+          description: Too many requests
+        '503':
+          description: Persistence or audit unavailable
+  /v1/auth/login:
+    post:
+      summary: Start a password-authenticated session
+      tags:
+      - Panel accounts
+      security: []
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelLogin'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets or expires the Panel session cookie.
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '429':
+          description: Too many requests
+        '503':
+          description: Persistence or audit unavailable
+  /v1/auth/logout:
+    post:
+      summary: Revoke the current session
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets or expires the Panel session cookie.
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '503':
+          description: Persistence or audit unavailable
+  /v1/me/password:
+    post:
+      summary: Change own password and revoke all sessions
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelPasswordChange'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets or expires the Panel session cookie.
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '429':
+          description: Too many requests
+        '503':
+          description: Persistence or audit unavailable
+  /v1/me/preferences/{page}:
+    parameters:
+    - name: page
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      summary: Read own choices for an accessible page
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelPreferences'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '503':
+          description: Persistence or audit unavailable
+    put:
+      summary: Save selected fields for the current user and page
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelPreferences'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '503':
+          description: Persistence or audit unavailable
+  /v1/manage/users:
+    get:
+      summary: List panel users
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      x-required-scope: users:manage
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PanelAccount'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '503':
+          description: Persistence or audit unavailable
+    post:
+      summary: Create a user with a non-admin role
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      x-required-scope: users:manage
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelNewUser'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '409':
+          description: Already initialized or conflicting account or role
+        '429':
+          description: Too many requests
+        '503':
+          description: Persistence or audit unavailable
+  /v1/manage/users/{username}:
+    parameters:
+    - name: username
+      in: path
+      required: true
+      schema:
+        type: string
+    patch:
+      summary: Change role, password or enabled status and revoke user sessions
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      x-required-scope: users:manage
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelUserChange'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '429':
+          description: Too many requests
+        '503':
+          description: Persistence or audit unavailable
+  /v1/manage/roles:
+    get:
+      summary: List roles and scopes assignable to custom roles
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      x-required-scope: users:manage
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PanelRoleDefinition'
+                  assignable:
+                    $ref: '#/components/schemas/PanelScopes'
+                additionalProperties: false
+                required:
+                - roles
+                - assignable
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '503':
+          description: Persistence or audit unavailable
+    post:
+      summary: Create a custom role
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      x-required-scope: users:manage
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelRoleInput'
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '409':
+          description: Already initialized or conflicting account or role
+        '503':
+          description: Persistence or audit unavailable
+  /v1/manage/roles/{name}:
+    parameters:
+    - name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    put:
+      summary: Change the scopes of a custom role
+      tags:
+      - Panel accounts
+      security:
+      - panelSession: []
+      x-required-scope: users:manage
+      parameters:
+      - $ref: '#/components/parameters/PanelRequest'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PanelRoleUpdate'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PanelSaved'
+        '401':
+          description: Session required
+        '403':
+          description: Insufficient role, invalid credentials or origin
+        '400':
+          description: Invalid fields
+        '409':
+          description: Already initialized or conflicting account or role
+        '503':
+          description: Persistence or audit unavailable
 components:
   securitySchemes:
+    panelSession: {type: apiKey, in: cookie, name: mcm_session}
     bearerAuth:
       type: http
       scheme: bearer
+  parameters:
+    PanelRequest:
+      in: header
+      name: X-MCM-Request
+      required: true
+      schema: {type: string, enum: ["1"]}
   schemas:
+    PanelUsername:
+      type: string
+      minLength: 2
+      maxLength: 40
+      pattern: ^[A-Za-z][A-Za-z0-9_-]{1,39}$
+    PanelPassword:
+      type: string
+      format: password
+      minLength: 12
+      description: At most 256 UTF-8 bytes.
+    PanelRole:
+      type: string
+      pattern: ^[a-z][a-z0-9_-]{1,39}$
+    PanelScopes:
+      type: array
+      items:
+        type: string
+    PanelLogin:
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/PanelUsername'
+        password:
+          $ref: '#/components/schemas/PanelPassword'
+      additionalProperties: false
+      required:
+      - username
+      - password
+    PanelBootstrap:
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/PanelUsername'
+        password:
+          $ref: '#/components/schemas/PanelPassword'
+        admin_key:
+          type: string
+          format: password
+      additionalProperties: false
+      required:
+      - username
+      - password
+      - admin_key
+    PanelPasswordChange:
+      type: object
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          $ref: '#/components/schemas/PanelPassword'
+      additionalProperties: false
+      required:
+      - current_password
+      - new_password
+    PanelAccount:
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/PanelUsername'
+        role:
+          $ref: '#/components/schemas/PanelRole'
+        scopes:
+          $ref: '#/components/schemas/PanelScopes'
+        enabled:
+          type: boolean
+      additionalProperties: false
+      required:
+      - username
+      - role
+      - enabled
+    PanelRoleDefinition:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/PanelRole'
+        scopes:
+          $ref: '#/components/schemas/PanelScopes'
+        builtin:
+          type: boolean
+      additionalProperties: false
+      required:
+      - name
+      - scopes
+      - builtin
+    PanelRoleInput:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/PanelRole'
+        scopes:
+          $ref: '#/components/schemas/PanelScopes'
+      additionalProperties: false
+      required:
+      - name
+      - scopes
+    PanelRoleUpdate:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/PanelRole'
+        scopes:
+          $ref: '#/components/schemas/PanelScopes'
+      additionalProperties: false
+      required:
+      - scopes
+    PanelNewUser:
+      type: object
+      properties:
+        username:
+          $ref: '#/components/schemas/PanelUsername'
+        password:
+          $ref: '#/components/schemas/PanelPassword'
+        role:
+          $ref: '#/components/schemas/PanelRole'
+      additionalProperties: false
+      required:
+      - username
+      - password
+      - role
+    PanelUserChange:
+      type: object
+      properties:
+        password:
+          $ref: '#/components/schemas/PanelPassword'
+        role:
+          $ref: '#/components/schemas/PanelRole'
+        enabled:
+          type: boolean
+      additionalProperties: false
+      minProperties: 1
+    PanelPreferences:
+      type: object
+      additionalProperties:
+        type: string
+      description: Allowed selection fields are defined per page. PUT merges the supplied fields for the current
+        account.
+    PanelSaved:
+      type: object
+      properties:
+        saved:
+          type: boolean
+      additionalProperties: false
+      required:
+      - saved
     Plugin:
       type: object
       properties:

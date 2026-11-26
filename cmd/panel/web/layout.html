@@ -1,0 +1,35 @@
+{{define "layout"}}<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Page.Title}} · MineCManager</title><link rel="stylesheet" href="/assets/panel.css">
+<script defer src="/assets/app.js"></script>
+{{if eq .Page.Group "Fleet"}}<script defer src="/assets/fleet.js"></script>{{end}}
+{{if or (eq .Page.Group "Minecraft") (eq .Page.ID "keys") (eq .Page.ID "audit") (eq .Page.ID "registrations")}}<script defer src="/assets/nodes.js"></script>{{end}}
+{{if or (eq .Page.ID "roles") (eq .Page.ID "users")}}<script defer src="/assets/manage.js"></script>{{end}}</head>
+<body data-page="{{.Page.ID}}" data-fields="{{.Page.Fields}}" data-next="{{.Next}}">
+{{if .User}}<div class="shell"><aside><a class="brand" href="/">MineCManager</a><nav aria-label="เมนูหลัก">{{range .Groups}}
+<div class="nav-group"><p>{{.Title}}</p>{{range .Pages}}<a href="{{.Path}}" {{if eq .ID $.Page.ID}}aria-current="page"{{end}}>{{.Title}}</a>{{end}}</div>{{end}}</nav>
+<div class="identity"><a href="/account">{{.User.Name}}</a><small>{{.User.Role}}</small><button id="logout" type="button">ออกจากระบบ</button></div></aside>
+<main><header><span>{{.Page.Group}}</span><h1>{{.Page.Title}}</h1></header><div id="message" role="status"></div>
+<div id="pageState" hidden>{{range $k,$v:=.Preferences}}<input data-field="{{$k}}" value="{{$v}}">{{end}}</div>
+{{.Body}}
+{{if or (eq .Page.Group "Fleet") (eq .Page.Group "Minecraft") (eq .Page.ID "keys") (eq .Page.ID "registrations") (eq .Page.ID "audit")}}<section class="output"><h2>ผลลัพธ์</h2><pre id="output" aria-live="polite"></pre></section>{{end}}
+</main></div>
+{{else}}<main class="auth"><div class="brand">MineCManager</div><section><h1>{{.Page.Title}}</h1>{{.Body}}<p id="message" role="status"></p></section></main>{{end}}
+</body></html>{{end}}
+
+{{define "setup"}}<p>ใช้ admin key ของ Panel ยืนยันตัวตนครั้งแรก แล้วตั้งชื่อผู้ใช้และรหัสผ่านสำหรับเข้าเว็บ</p>
+<form id="authForm"><label>Admin key<input id="bootstrapKey" type="password" required autocomplete="off"></label>
+<label>ชื่อผู้ใช้<input id="username" required minlength="2" maxlength="40" pattern="[a-zA-Z][a-zA-Z0-9_\-]{1,39}" autocomplete="username"></label>
+<label>รหัสผ่านอย่างน้อย 12 ตัวอักษร<input id="password" type="password" required minlength="12" autocomplete="new-password"></label>
+<button class="primary" type="submit">สร้างบัญชีผู้ดูแล</button></form>{{end}}
+{{define "login"}}<form id="authForm"><label>ชื่อผู้ใช้<input id="username" required autocomplete="username"></label>
+<label>รหัสผ่าน<input id="password" type="password" required autocomplete="current-password"></label>
+<button class="primary" type="submit">เข้าสู่ระบบ</button></form>{{end}}
+{{define "account"}}<section><p>ชื่อผู้ใช้ <strong>{{.User.Name}}</strong> · บทบาท <strong>{{.User.Role}}</strong></p>
+<form id="passwordForm"><h2>เปลี่ยนรหัสผ่าน</h2><label>รหัสผ่านปัจจุบัน<input type="password" id="oldPassword" required autocomplete="current-password"></label>
+<label>รหัสผ่านใหม่อย่างน้อย 12 ตัวอักษร<input id="newPassword" type="password" required minlength="12" autocomplete="new-password"></label>
+<button class="primary">บันทึกและเข้าสู่ระบบใหม่</button></form></section>{{end}}
+{{define "overview"}}<p>เข้าสู่ระบบในชื่อ <strong>{{.User.Name}}</strong> ด้วยบทบาท <strong>{{.User.Role}}</strong></p>
+<div class="cards">{{range .Groups}}{{if ne .Title "Panel"}}<section><h2>{{.Title}}</h2>{{range .Pages}}<a class="feature" href="{{.Path}}">{{.Title}} <span aria-hidden="true">→</span></a>{{end}}</section>{{end}}{{end}}</div>{{end}}
+{{define "hostSelect"}}<label>เครื่อง VM <select id="host"></select></label>{{end}}
+{{define "nodeSelect"}}<label>Node {{if .User.Has "nodes:read"}}<select id="node"></select>{{else}}<input id="node" placeholder="Server ID">{{end}}</label>{{end}}

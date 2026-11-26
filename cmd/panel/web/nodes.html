@@ -1,0 +1,85 @@
+{{define "nodes"}}
+<section>
+{{template "nodeSelect" .}}
+<div class="row">{{if .User.Has "nodes:read"}}<button data-action="status">สถานะ</button>{{end}}{{if .User.Has "nodes:control"}}<button data-action="start">เริ่ม</button>{{end}}{{if .User.Has "nodes:control"}}<button data-action="stop">หยุด</button>{{end}}{{if .User.Has "nodes:control"}}<button data-action="restart">รีสตาร์ต</button>{{end}}</div>
+</section>
+{{end}}
+
+{{define "plugins"}}
+<section>
+{{template "nodeSelect" .}}
+{{if .User.Has "plugins:read"}}<button id="plugins">รายการ plugins</button>{{end}}<label>ชื่อไฟล์ <input id="plugin" placeholder="Example.jar"></label>{{if .User.Has "plugins:read"}}<button id="pluginInfo">รายละเอียด / เวอร์ชัน</button>{{end}}{{if .User.Has "plugins:write"}}<label>ไฟล์ JAR <input id="jar" type="file" accept=".jar"></label>
+<label>SHA-256 ปัจจุบัน (เว้นว่างเมื่อติดตั้งใหม่) <input id="pluginHash" size="65"></label><button id="upload">ติดตั้ง / แทนที่</button><label>เวอร์ชัน SHA-256 ที่จะคืนค่า <input id="pluginVersion" size="65"></label><button id="rollbackPlugin">คืนค่า plugin</button><button id="deletePlugin">ลบ plugin</button><small>ต้องหยุดเซิร์ฟเวอร์ก่อนเปลี่ยน plugin</small>{{end}}
+</section>
+{{end}}
+
+{{define "config"}}
+<section>
+{{template "nodeSelect" .}}
+<label>Path <input id="configPath" value="server.properties" size="50"></label>{{if .User.Has "configs:read"}}<button id="readConfig">อ่าน</button>{{end}}<textarea id="configContent" aria-label="Config content" spellcheck="false" {{if not (.User.Has "configs:write")}}readonly{{end}}></textarea>{{if .User.Has "configs:write"}}<button id="saveConfig">บันทึก</button><label>เวอร์ชัน SHA-256 ที่จะคืนค่า <input id="configVersion" size="65"></label><button id="rollbackConfig">คืนค่า config</button>{{end}}<small>อ่านไฟล์ก่อนบันทึก ระบบตรวจเวอร์ชันและ syntax ของ JSON/YAML</small>
+</section>
+{{end}}
+
+{{define "snapshots"}}
+<section>
+{{template "nodeSelect" .}}
+{{if .User.Has "backups:read"}}<button id="backups">รายการ backups</button>{{end}}{{if .User.Has "backups:write"}}<button id="backup">สร้าง backup</button>{{end}}{{if .User.Has "backups:restore"}}<label>Backup ID <input id="backupID" size="40"></label><button id="restore">กู้คืน</button>{{end}}<p>
+<small>หยุดเซิร์ฟเวอร์ก่อนสำรองหรือกู้คืน เก็บ root เดิมไว้ข้าง directory เดิมหลัง restore สำเร็จ</small></p>
+</section>
+{{end}}
+
+{{define "players"}}
+<section>
+{{template "nodeSelect" .}}
+{{if .User.Has "players:read"}}<button id="players">ผู้เล่นออนไลน์</button>{{end}}{{if .User.Has "resources:read"}}<button id="resources">ทรัพยากรที่โหลดอยู่</button>{{end}}{{if or (.User.Has "inventory:read") (.User.Has "inventory:write")}}<label>Player UUID <input id="playerUUID" size="42"></label>{{end}}{{if .User.Has "inventory:read"}}<button id="inventory">อ่าน inventory</button>{{end}}{{if .User.Has "inventory:write"}}<label>Slot (0–40) <input id="slot" type="number" min="0" max="40" value="0"></label>
+<label>Material <input id="material" value="STONE"></label>
+<label>Amount (0 = ล้าง slot) <input id="amount" type="number" min="0" max="64" value="1"></label>
+<label>ชื่อ item (ไม่บังคับ) <input id="itemName"></label><button id="writeItem">แทนที่ item ใน slot</button>{{end}}<p>
+<small>ต้องติดตั้ง Paper bridge และผู้เล่นต้องออนไลน์ อ่าน inventory ก่อนแก้ไขทุกครั้ง สถิติแสดงเฉพาะของตกในพื้นที่ที่โหลดและ inventory ผู้เล่นออนไลน์ ไม่รวมผู้เล่นออฟไลน์หรือของในหีบ</small></p>
+</section>
+{{end}}
+
+{{define "keys"}}
+<section>
+<button id="keys">รายการ API keys</button>
+<details>
+<summary>สร้าง API key</summary>
+<label>ID <input id="keyID"></label>
+<label>Scopes (คั่นด้วย comma) <input id="scopes" value="nodes:read,plugins:read" size="60"></label>
+<label>Node IDs (ว่าง = ทุก node) <input id="keyNodes"></label>
+<label>หมดอายุ (UTC, ไม่บังคับ) <input id="expiry" placeholder="2027-01-01T00:00:00Z"></label>
+<button id="createKey">สร้าง key</button>
+<p>
+<small>Key ใหม่จะแสดงครั้งเดียวในผลลัพธ์ด้านล่าง</small></p>
+</details>
+<details>
+<summary>ยกเลิก key</summary>
+<label>ID <input id="revokeID"></label>
+<button id="revoke">ยกเลิกสิทธิ์</button>
+</details>
+</section>
+{{end}}
+
+{{define "registrations"}}
+<section>
+<details>
+<summary>ลงทะเบียน node</summary>
+<label>ID <input id="nodeID"></label>
+<label>Agent URL <input id="nodeURL" placeholder="https://agent.internal:9081"></label>
+<label>Token environment variable <input id="tokenEnv" placeholder="MCM_NODE_02_TOKEN"></label>
+<button id="register">ลงทะเบียน</button>
+<small>ต้อง provision token และ mTLS certificate ที่เครื่องก่อน</small>
+</details>
+<details>
+<summary>นำ node ออกจากทะเบียน</summary>
+<label>ID <input id="removeNodeID"></label>
+<button id="removeNode">นำออก</button>
+</details>
+</section>
+{{end}}
+
+{{define "audit"}}
+<section>
+<button id="audit">โหลดบันทึกล่าสุด</button>
+</section>
+{{end}}

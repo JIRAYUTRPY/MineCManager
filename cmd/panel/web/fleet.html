@@ -1,0 +1,153 @@
+{{define "hosts"}}
+<section id="hosts">
+{{template "hostSelect" .}}<button id="metrics">อ่าน CPU / RAM / Disk</button>
+<button id="hostServers">รายการ Minecraft</button>
+<div id="metricsView" class="grid">
+</div>
+<details>
+<summary>เพิ่ม / เปลี่ยนข้อมูล VM</summary>
+<div class="grid">
+<label>ID <input id="hostID" placeholder="game-01"></label>
+<label>Public IP <input id="publicIP"></label>
+<label>Private IP <input id="privateIP"></label>
+<label>IP ที่ Panel ใช้เชื่อมต่อ <input id="address" placeholder="เลือก IP ที่ Panel เข้าถึงได้"></label>
+<label>SSH port <input id="port" type="number" value="22"></label>
+<label>SSH user <input id="user" value="root"></label>
+</div>
+<button id="discover">อ่าน SSH fingerprint</button>
+<label>Host fingerprint <input id="fingerprint" placeholder="SHA256:..."></label>
+<p>เทียบ fingerprint กับ console ของผู้ให้บริการ VM ก่อนบันทึก: <code>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256</code></p>
+<label><input id="trust" type="checkbox"> ตรวจสอบ fingerprint ของ VM นี้แล้ว</label>
+<label>SSH password (ใช้กับ sudo ได้ด้วย) <input id="password" type="password" autocomplete="new-password"></label>
+<label>หรือ SSH private key (ไม่มี passphrase) <textarea id="privateKey" spellcheck="false"></textarea></label>
+<p>VM ต้องมี Python 3 และ user ต้องเป็น root หรือมี sudo บนเครื่องนั้น Credentials จะถูกเข้ารหัสก่อนบันทึก</p>
+<button id="testHost">ทดสอบการเชื่อมต่อ</button>
+<button id="addHost">ตรวจสอบและบันทึก VM</button>
+<button id="replaceHost">เปลี่ยน credentials / fingerprint</button>
+<button id="deleteHost">นำเครื่องออกจาก Panel</button>
+</details>
+</section>
+{{end}}
+
+{{define "minecraft"}}
+<section id="minecraft">
+{{template "hostSelect" .}}
+<div class="grid">
+<label>Server ID <input id="serverID" value="survival"></label>
+<label>Platform <select id="platform"><option value="paper">Paper</option><option value="purpur">Purpur</option><option value="fabric">Fabric</option><option value="vanilla">Vanilla</option></select></label>
+<label>Minecraft release <input id="version" placeholder="เช่น 1.21.11"></label>
+<label>RAM (MiB) <input id="ram" type="number" value="2048"></label>
+<label>Game port <input id="gamePort" type="number" value="25565"></label>
+</div>
+<p>ติดตั้งใน /srv/minecmanager/&lt;server-id&gt; • เลือก Java อัตโนมัติ • ไม่เขียนทับ server เดิม</p>
+<label><input id="eula" type="checkbox"> ฉันอ่านและยอมรับ <a href="https://www.minecraft.net/eula" target="_blank" rel="noreferrer">Minecraft EULA</a></label>
+<button id="deploy">ติดตั้งบน VM ที่เลือก</button>
+<p>หลังติดตั้งตรวจ logs ว่ามี “Done” แล้วเปิด TCP game port ใน firewall ของ VM/Cloud ก่อนเชื่อมต่อ</p>
+<div class="grid">
+<label>Service <input id="service" value="mcm-survival.service"></label>
+</div>
+<button data-verb="status">สถานะ</button>
+<button data-verb="start">เริ่ม</button>
+<button data-verb="stop">หยุด</button>
+<button data-verb="restart">รีสตาร์ต</button>
+<button data-verb="logs">Logs</button>
+</section>
+{{end}}
+
+{{define "files"}}
+<section id="files">
+{{template "hostSelect" .}}
+<p class="warn">สิทธิ์ส่วนนี้ควบคุมเครื่องระดับ root รวมถึงไฟล์ระบบและ services ใช้เฉพาะผู้ดูแล infrastructure</p>
+<label>Absolute path <input id="path" value="/srv/minecmanager"></label>
+<button id="listFiles">เปิด directory</button>
+<button id="readFile">อ่านไฟล์ (ไม่เกิน 1 MiB)</button>
+<textarea id="fileContent" spellcheck="false" aria-label="File content"></textarea>
+<button id="saveFile">บันทึก + เก็บสำเนาเดิม</button>
+<p>Editor ตรวจ SHA-256 ป้องกันเขียนทับไฟล์ที่เปลี่ยนไปแล้ว การบันทึกไฟล์ระบบไม่ได้ตรวจ syntax หรือ restart service ให้อัตโนมัติ</p>
+<details>
+<summary>OS command console</summary>
+<p>ใช้จัดการ packages, processes, firewall, permissions และงานไฟล์อื่น ๆ คำสั่งทำงานแบบ non-interactive จำกัด 120 วินาที ระวังการปิด SSH หรือเครือข่ายที่ Panel ใช้อยู่</p>
+<textarea id="command" spellcheck="false" placeholder="df -h; free -m; ps aux"></textarea>
+<button id="runCommand">รันคำสั่งระดับ root</button>
+</details>
+</section>
+{{end}}
+
+{{define "cloud"}}
+<section id="cloud">
+<details>
+<summary>ตั้งค่าการเชื่อมต่อ</summary>
+<label>DNS API token <input id="cfToken" type="password" autocomplete="new-password"></label>
+<div class="grid">
+<label>R2 account ID <input id="account"></label>
+<label>Bucket <input id="bucket"></label>
+<label>S3 Access Key ID <input id="accessKey" type="password"></label>
+<label>S3 Secret Access Key <input id="secretKey" type="password"></label>
+</div>
+<p>ใช้ DNS token ที่มี Zone Read / DNS Edit และ R2 credentials ของ bucket สำหรับ Object Read & Write เว้นช่อง secret ว่างเพื่อใช้ค่าเดิม</p>
+<button id="saveCloud">บันทึก Cloudflare</button>
+<button id="cloudStatus">ตรวจการตั้งค่า</button>
+</details>
+<button id="zones">ดู Zones</button>
+<div class="grid">
+<label>Zone ID <input id="zone"></label>
+<label>Hostname <input id="dnsName" placeholder="mc.example.com"></label>
+<label>Type <select id="dnsType"><option>A</option><option>AAAA</option><option>CNAME</option><option>SRV</option></select></label>
+<label>IP / Target <input id="dnsContent"></label>
+<label>Record ID (ว่าง = สร้างใหม่) <input id="recordID"></label>
+</div>
+<label>SRV data (JSON เฉพาะ type SRV) <textarea id="srv">{"priority":0,"weight":0,"port":25565,"target":"mc.example.com"}</textarea></label>
+<label><input id="webProxy" type="checkbox"> Hostname นี้ใช้เว็บ HTTP/HTTPS และต้องการ Cloudflare proxy</label>
+<button id="saveDNS">สร้าง / อัปเดต DNS</button>
+<p>Minecraft ใช้ DNS only การสร้าง DNS ไม่ได้เปิด port, ติดตั้ง TLS หรือ proxy TCP ของเกม</p>
+</section>
+{{end}}
+
+{{define "backup"}}
+<section id="backup">
+{{template "hostSelect" .}}
+<label>Server ID<input id="serverID" value="survival"></label>
+<p>การสำรองจะหยุด server ชั่วคราว แล้วเริ่มกลับหากเดิมเปิดอยู่</p>
+<label><input id="r2" type="checkbox"> อัปโหลดไป Cloudflare R2</label>
+<div class="grid">
+<label>เก็บ backup ใน VM (ชุด) <input id="retain" type="number" value="7"></label>
+<label>Schedule ID <input id="scheduleID" value="daily"></label>
+<label>ทุกกี่ชั่วโมง <input id="hours" type="number" value="24"></label>
+</div>
+<button id="backupNow">สำรองตอนนี้</button>
+<button id="saveSchedule">เปิดใช้งาน schedule</button>
+<button id="schedules">ดู schedules</button>
+<button id="removeSchedule">ลบ schedule</button>
+<p>เวลา schedule เป็น UTC และต้องเปิด Panel ไว้ R2 retention ให้กำหนด bucket lifecycle บน Cloudflare; จำนวนชุดด้านบนใช้กับ VM เท่านั้น</p>
+<button id="backups">รายการ backup บน VM</button>
+<button id="r2List">รายการ backup บน R2</button>
+<label>Backup filename บน VM <input id="backupName"></label>
+<button id="restore">กู้คืน (ต้องหยุด server ก่อน)</button>
+<label>R2 object key <input id="r2Key"></label>
+<button id="r2Download">สร้างลิงก์ดาวน์โหลด 10 นาที</button>
+<label>SHA-256 จากผล backup เดิม <input id="r2SHA"></label>
+<button id="r2Restore">ดาวน์โหลดจาก R2 + กู้คืนบน VM</button>
+<p>ต้องหยุด server ก่อน ระบบตรวจ checksum และเก็บ root เดิมไว้ย้อนกลับ</p>
+</section>
+{{end}}
+
+{{define "updates"}}
+<section id="updates">
+<label>เครื่องที่จะอัปเดต <select id="updateTarget"><option value="">Panel</option></select></label>
+  <p id="releaseInfo" role="status">เชื่อมต่อเพื่อดูเวอร์ชัน</p>
+  <button id="checkRelease">ตรวจ GitHub Releases</button>
+  <button id="applyRelease" disabled>อัปเดต</button>
+  <button id="releaseStatus">โหลดสถานะ</button>
+  <small>ตรวจเวอร์ชันทุก 6 ชั่วโมง ผู้ดูแลเลือกเวลาอัปเดตเอง</small>
+</section>
+{{end}}
+
+{{define "jobs"}}
+<section id="jobs">
+<label>สถานะงาน<select id="jobStatus"><option value="">ทั้งหมด</option><option>queued</option><option>running</option><option>succeeded</option><option>failed</option><option>interrupted</option></select></label>
+<button id="refreshJobs">โหลดสถานะงาน</button>
+<p>ออกจากหน้าเว็บได้ งานยังทำต่อที่ Panel หาก Panel restart งานที่ทำค้างจะเป็น interrupted และไม่รันซ้ำอัตโนมัติ</p>
+<div class="scroll"><table><thead><tr><th>VM / งาน</th><th>สถานะ</th><th>เวลา</th><th>ผลลัพธ์</th></tr></thead><tbody id="jobRows"></tbody></table>
+</div>
+</section>
+{{end}}
