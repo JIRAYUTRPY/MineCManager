@@ -94,7 +94,8 @@ async function refreshRelease(data, reportError = false) {
     const busy = ['queued', 'applying'].includes(s.phase);
     $('releaseInfo').textContent = [
       'ติดตั้ง ' + s.installed,
-      'GitHub Latest ' + (s.latest || (s.check_error ? 'ตรวจไม่สำเร็จ' : 'ยังไม่มี stable release')),
+      'GitHub Latest ' +
+        (s.latest || (s.check_error ? 'ตรวจไม่สำเร็จ' : s.checked ? 'ยังไม่มี stable release' : 'ยังไม่ได้ตรวจ')),
       s.checked ? 'ตรวจเมื่อ ' + new Date(s.checked).toLocaleString('th-TH') : '',
       labels[s.phase] || s.phase,
       s.check_error || s.message

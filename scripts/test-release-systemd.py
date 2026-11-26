@@ -98,7 +98,7 @@ with contextlib.ExitStack() as cleanup, tempfile.TemporaryDirectory() as tmp, ht
     tmp = Path(tmp)
     bootstrap = tmp / "setup.py"
     bootstrap.write_bytes(fixture(root_url, active_tag))
-    fixture(root_url, "v1.1.0")
+    fixture(root_url, "1.1.0")
     fixture(root_url, "v1.2.0", broken=True)
     ctx = None
     if ROLE == "panel":
@@ -189,7 +189,7 @@ http.server.HTTPServer(("127.0.0.1", 9082), Bridge).serve_forever()
         url, ctx = base + "/v1/fleet/updates?node=survival", None
     assert fetch(url, token, context=ctx)[1]["installed"] == "v1.0.0"
     subprocess.run([sys.executable, bootstrap, *args], check=True)
-    active_tag = "v1.1.0"
+    active_tag = "1.1.0"
     assert fetch(url, token, {"action": "check"}, ctx)[1]["available"]
     assert fetch(url, token, {"action": "apply", "version": active_tag}, ctx)[0] == 202
     assert wait_phase(url, token, "succeeded", ctx)["installed"] == active_tag
@@ -199,7 +199,7 @@ http.server.HTTPServer(("127.0.0.1", 9082), Bridge).serve_forever()
     active_tag = "v1.2.0"
     assert fetch(url, token, {"action": "check"}, ctx)[1]["latest"] == active_tag
     assert fetch(url, token, {"action": "apply", "version": active_tag}, ctx)[0] == 202
-    assert wait_phase(url, token, "failed", ctx)["installed"] == "v1.1.0"
+    assert wait_phase(url, token, "failed", ctx)["installed"] == "1.1.0"
     if ROLE == "game":
         assert not m.active("mcm-survival")
         assert (game / "world-sentinel").read_text() == "world"

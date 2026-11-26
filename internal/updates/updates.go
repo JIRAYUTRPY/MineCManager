@@ -9,7 +9,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
+	"syscall"
 	"time"
 )
 
@@ -24,7 +26,7 @@ type Response struct {
 	Error string          `json:"error,omitempty"`
 }
 
-var stable = regexp.MustCompile(`^v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$`)
+var stable = regexp.MustCompile(`^v?(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$`)
 
 func Parse(r *http.Request) (Request, error) {
 	var q Request
@@ -54,7 +56,16 @@ func Local(ctx context.Context, q Request) Response {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "unix", "/run/mcm-release.sock")
 	if err != nil {
-		return Response{Code: 503, Error: "release updater is unavailable; this host needs a setup.py managed installation"}
+		message := "cannot connect to the release updater; check mcm-release.socket on the selected VM"
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			message = "release updater socket is missing; check mcm-release.socket on a setup.py installation. A Compose Panel uses docker compose to update itself"
+		case errors.Is(err, syscall.ECONNREFUSED):
+			message = "release updater socket is not listening; check systemctl status mcm-release.socket on the selected VM"
+		case errors.Is(err, os.ErrPermission):
+			message = "service cannot access the release updater socket; check its group and permissions on the selected VM"
+		}
+		return Response{Code: 503, Error: message}
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(45 * time.Second))

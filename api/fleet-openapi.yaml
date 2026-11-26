@@ -40,7 +40,7 @@ paths:
               required: [action]
               properties:
                 action: {type: string, enum: [check, apply]}
-                version: {type: string, description: "Required for apply, e.g. v1.2.3"}
+                version: {type: string, description: "Exact published tag for apply, e.g. 1.2.3 or v1.2.3"}
       responses:
         '200': {description: Check completed}
         '202': {description: Update queued}

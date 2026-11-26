@@ -10,10 +10,14 @@
 set -e
 api=https://api.github.com/repos/JIRAYUTRPY/MineCManager/releases/latest
 read -r url digest < <(curl -fsSL "$api" | python3 -c '
-import json, sys
+import json, re, sys
 r = json.load(sys.stdin)
-a, = [a for a in r["assets"] if a["name"] == "setup.py"]
-assert not r["draft"] and not r["prerelease"] and a["digest"].startswith("sha256:")
+assets = [a for a in r["assets"] if a["name"] == "setup.py" and a["state"] == "uploaded"]
+if r["draft"] or r["prerelease"] or len(assets) != 1:
+    sys.exit("Release %s is missing a published setup.py. Check Actions → Release." % r["tag_name"])
+a = assets[0]
+if not re.fullmatch(r"sha256:[0-9a-f]{64}", a.get("digest") or ""):
+    sys.exit("GitHub did not return a SHA-256 digest for setup.py")
 print(a["browser_download_url"], a["digest"][7:])')
 curl -fL "$url" -o setup.py
 printf '%s  setup.py\n' "$digest" | sha256sum -c -
@@ -46,7 +50,18 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 
 เปิด **อัปเดตระบบ** ที่ `/fleet/updates` ด้วยสิทธิ์ `admin:fleet` เลือก Panel หรือชื่อ node แล้วกด **ตรวจ GitHub Releases** หน้าเว็บแสดงเวอร์ชันที่ติดตั้ง เวอร์ชัน Latest เวลาเช็กล่าสุด และผลของงาน ปุ่ม **อัปเดต** ใช้ได้เมื่อมีเวอร์ชันใหม่กว่า Timer บนแต่ละ VM ตรวจทุก 6 ชั่วโมงโดยมีเวลาสุ่มเพิ่มสูงสุด 15 นาที การติดตั้งเกิดขึ้นเมื่อผู้ดูแลกดปุ่ม
 
-ตัวตรวจอ่าน `/releases/latest` ของ repo นี้เท่านั้น รับเฉพาะ published stable release ที่ tag มีรูปแบบ `vMAJOR.MINOR.PATCH` เมื่อไม่มี release จะแสดงว่าไม่มีรุ่นให้อัปเดต เมื่อ GitHub ใช้งานไม่ได้จะแสดงข้อผิดพลาด ก่อนติดตั้ง worker ตรวจว่า release ยังตรงกับรุ่นที่กด แล้วตรวจ GitHub asset digest และ `SHA256SUMS` ก่อนหยุด service
+ตัวตรวจอ่าน `/releases/latest` ของ repo นี้และรับ stable release ที่เผยแพร่แล้ว รองรับทั้ง `1.2.3` และ `v1.2.3` ซึ่งมีเลขรุ่นเท่ากัน ปุ่มอัปเดตเปิดเมื่อเลขรุ่นใหม่กว่าและ GitHub แสดงไฟล์ที่เครื่องนั้นต้องใช้พร้อม digest แล้ว ก่อนติดตั้ง worker ตรวจ tag เดิมอีกครั้งและตรวจเนื้อหาไฟล์กับ GitHub digest และ `SHA256SUMS` ก่อนหยุด service
+
+### เมื่อปุ่มอัปเดตใช้ไม่ได้
+
+| สิ่งที่เห็น | ตรวจตรงไหน | วิธีดำเนินการ |
+|---|---|---|
+| หน้า Release มีเพียง Source code (zip/tar.gz) หรือข้อความ `needs one uploaded SHA256SUMS` | GitHub Actions → Release ของ tag นั้น | รอ job `publish` หรือตรวจ job แรกที่ล้มเหลว แล้วกด **ตรวจ GitHub Releases** อีกครั้ง |
+| `Expected a stable release tag such as v1.2.3` | เครื่องใช้ตัวอัปเดตก่อนรองรับเลขรุ่นที่ไม่มี `v` | ออก stable release ที่ขึ้นต้นด้วย `v` พร้อมไฟล์ครบ เพื่อให้เครื่องรุ่นเดิมอัปเดตข้ามมาได้ |
+| Installed และ GitHub Latest มีเลขเวอร์ชันเท่ากัน | ดูค่า `installed` และ `latest` | เครื่องอยู่ที่รุ่นนั้นแล้ว จะอัปเดตได้เมื่อมีเลขรุ่นสูงกว่า |
+| HTTP 503 หรือข้อความเรื่อง updater socket | บน VM เป้าหมายรัน `systemctl status mcm-release.socket` | ถ้าติดตั้งด้วย `setup.py` ให้ตรวจ unit และสิทธิ์ socket ส่วน Panel แบบ Compose อัปเดตตัวเองด้วย Compose ตามหัวข้อด้านล่าง |
+
+ดูสิ่งที่ Panel เห็นได้ด้วย `sudo python3 /opt/minecmanager/current/setup.py check` บน VM ที่ติดตั้งแบบ managed และดูรายการไฟล์สาธารณะด้วย `curl -fsS https://api.github.com/repos/JIRAYUTRPY/MineCManager/releases/latest | jq '{tag_name, assets: [.assets[].name]}'`
 
 การอัปเดต Panel รีสตาร์ตเฉพาะ Panel ควรรอให้ Fleet job ที่กำลังทำงานเสร็จก่อน เพราะงานที่ถูกขัดจังหวะระหว่างรีสตาร์ตจะมีสถานะ interrupted การอัปเดต VM เกมใช้ lock เดียวกับ Fleet หากกำลัง backup หรือ restore ให้รอ job นั้นจบแล้วกดอัปเดตอีกครั้ง ตัวอัปเดตเปลี่ยน Agent กับ bridge พร้อมกัน เกมที่เปิดอยู่จะเริ่มกลับและตรวจ bridge หลังอัปเดต เกมที่ปิดอยู่จะคงสถานะปิด ขณะ service รีสตาร์ตหน้าเว็บอาจขาดการติดต่อชั่วคราว กด **โหลดสถานะ** เพื่อตรวจผลได้อีกครั้ง เมื่อ health check ไม่ผ่าน worker สลับกลับ binary/JAR รุ่นเดิมและบันทึกผล ถ้าไฟดับระหว่างสลับรุ่น worker จะกู้รุ่นก่อนหน้าเมื่อเครื่องเริ่มใหม่
 
@@ -66,7 +81,7 @@ sudo python3 /opt/minecmanager/current/setup.py pair survival 10.20.0.15 --ssh g
 
 ## 4. ออก release
 
-หลัง merge ให้สร้าง tag จาก commit ที่ต้องการ release ตัวอย่างสำหรับรุ่น `v0.4.0`
+หลัง merge ให้สร้าง tag จาก commit ที่ต้องการ release แนะนำให้ใช้รูปแบบ `vX.Y.Z` เพื่อให้ตัวอัปเดตรุ่นเดิมอ่านได้ ตัวอย่างสำหรับรุ่น `v0.4.0`
 
 ```bash
 git switch main
@@ -75,4 +90,10 @@ git tag -a v0.4.0 -m 'MineCManager v0.4.0'
 git push origin v0.4.0
 ```
 
-workflow **Release** ทดสอบ สร้าง Panel/Agent สำหรับ amd64 และ arm64, build Paper bridge ด้วย Java 21 แล้วทดสอบ systemd install/update/rollback บน Ubuntu ก่อนอัปโหลด installer, binary, JAR และ checksum ทั้งหมดขึ้น draft และ publish เมื่อครบ PR จะตรวจชุดติดตั้งโดยไม่สร้าง GitHub Release
+workflow **Release** build Panel และ Agent สำหรับ amd64/arm64, build Paper bridge ด้วย Java 21 และทดสอบ install/update/rollback ด้วย systemd บน Ubuntu สำหรับ tag ที่ push จาก Git ตัว workflow สร้าง draft แนบไฟล์ครบ แล้ว publish สำหรับ repo ที่เปิด immutable releases ให้ใช้วิธี push tag นี้
+
+ผู้ดูแลสามารถเลือก **Releases → Draft a new release → Publish release** ด้วย tag เช่น `0.1.0` หรือ `v0.1.0` ได้เช่นกัน เมื่อ repo อนุญาตให้เพิ่มไฟล์ลง release ที่เผยแพร่แล้ว CI จะเติมไฟล์ที่ขาด แนบ `SHA256SUMS` เป็นไฟล์สุดท้าย และตรวจ digest บน GitHub ก่อนจบงาน หากไฟล์เดิมต่างจากที่ build ให้ใช้เลขรุ่นใหม่
+
+เมื่อ CI ผ่าน หน้า Assets ควรมีไฟล์แนบ 7 ไฟล์ ได้แก่ `setup.py`, `SHA256SUMS`, `MineCManagerBridge.jar` และ binary `mcm-{panel,agent}-linux-{amd64,arm64}` ทั้งสี่ไฟล์ การ merge PR จะตรวจชุดติดตั้ง ส่วนการเผยแพร่เกิดจาก tag หรือ Release ใหม่ การแก้ workflow มีผลกับรุ่นที่สร้างจาก commit ที่รวมการแก้ไขแล้ว
+
+สำหรับ Panel แบบ Compose ที่ build จาก repo นี้ ให้อัปเดต checkout ไปยัง tag ที่ต้องการแล้วรัน `docker compose up -d --build panel` จากไดเรกทอรีที่ใช้ติดตั้งเดิม เพื่อใช้ volume เดิม คู่มือติดตั้งที่ใช้ `setup.py panel` จะติดตั้ง updater และ socket ให้บน Panel VM
