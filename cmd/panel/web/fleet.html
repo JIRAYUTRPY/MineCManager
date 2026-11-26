@@ -134,11 +134,17 @@
 {{define "updates"}}
 <section id="updates">
 <label>เครื่องที่จะอัปเดต <select id="updateTarget"><option value="">Panel</option></select></label>
-  <p id="releaseInfo" role="status">เชื่อมต่อเพื่อดูเวอร์ชัน</p>
+  <p id="releaseInfo" role="status">กำลังโหลดสถานะ</p>
+  <div id="composeUpdate" hidden>
+    <p>เปิด Release ที่ต้องการ แล้ว checkout tag นั้นบน Panel VM จากไดเรกทอรี Compose เดิม รัน <code>docker compose up -d --build panel</code> เพื่อใช้ข้อมูลใน volume เดิม</p>
+    <a href="https://github.com/JIRAYUTRPY/MineCManager/releases/latest" target="_blank" rel="noreferrer">ดู GitHub Release ล่าสุด</a>
+  </div>
+  <div id="managedUpdate">
   <button id="checkRelease">ตรวจ GitHub Releases</button>
   <button id="applyRelease" disabled>อัปเดต</button>
   <button id="releaseStatus">โหลดสถานะ</button>
   <small>ตรวจเวอร์ชันทุก 6 ชั่วโมง ผู้ดูแลเลือกเวลาอัปเดตเอง</small>
+  </div>
 </section>
 {{end}}
 

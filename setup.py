@@ -34,7 +34,7 @@ STATE = Path("/var/lib/mcm-release")
 PANEL_DATA = Path("/var/lib/mcm-managed-panel")
 FLEET_STATE = Path("/var/lib/minecmanager")
 UNITS = Path("/etc/systemd/system")
-TAG = re.compile(r"v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})")
+TAG = re.compile(r"v?(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})")
 NODE = re.compile(r"[a-z][a-z0-9-]{0,31}")
 SOCKET = "/run/mcm-release.sock"
 PANEL_URL = "http://127.0.0.1:9080"
@@ -109,7 +109,7 @@ def locked(name="operation", wait=False):
 def version(tag):
     match = TAG.fullmatch(tag) if isinstance(tag, str) else None
     if not match:
-        raise Problem("Expected a stable release tag such as v1.2.3", 400)
+        raise Problem("Expected a stable release tag such as 1.2.3 or v1.2.3", 400)
     return tuple(map(int, match.groups()))
 
 
@@ -128,7 +128,7 @@ def request(url, timeout=30):
     }), timeout=timeout)
 
 
-def latest():
+def latest(role=None):
     try:
         with request(API) as response:
             data = response.read((1 << 20) + 1)
@@ -141,21 +141,37 @@ def latest():
     release = json.loads(data)
     if release.get("draft") is not False or release.get("prerelease") is not False:
         raise Problem("GitHub Latest does not identify a published stable release", 502)
-    version(release.get("tag_name"))
+    tag = release.get("tag_name")
+    try:
+        version(tag)
+    except Problem:
+        raise Problem(f"GitHub Latest tag {tag!r} must be a stable X.Y.Z or vX.Y.Z version", 502) from None
+    required = bundle_files(role) if role else ["setup.py"]
+    asset_metadata(release, "SHA256SUMS", 65536)
+    for name in required:
+        asset_metadata(release, name, 128 << 20)
     return release
 
 
-def fetch_asset(release, name, output, expected=None, limit=128 << 20):
-    matches = [a for a in release["assets"] if a["name"] == name and a["state"] == "uploaded"]
+def asset_metadata(release, name, limit):
+    matches = [a for a in release.get("assets", []) if a.get("name") == name and a.get("state") == "uploaded"]
+    tag = release["tag_name"]
     if len(matches) != 1:
-        raise Problem("Missing or ambiguous release asset: " + name, 502)
+        raise Problem(f"Release {tag} needs one uploaded {name}. Check the GitHub Release workflow.", 502)
     asset = matches[0]
     digest = asset.get("digest") or ""
-    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest) or expected is not None and digest[7:] != expected:
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise Problem(f"Release {tag} has no valid SHA-256 digest for {name}", 502)
+    size = asset.get("size")
+    if type(size) is not int or not 0 < size <= limit:
+        raise Problem(f"Release {tag} has an invalid size for {name}", 502)
+    return size, digest[7:]
+
+
+def fetch_asset(release, name, output, expected=None, limit=128 << 20):
+    size, digest = asset_metadata(release, name, limit)
+    if expected is not None and digest != expected:
         raise Problem("Invalid release checksum: " + name, 502)
-    size = asset["size"]
-    if not isinstance(size, int) or not 0 < size <= limit:
-        raise Problem("Invalid asset size: " + name, 502)
     url = "https://github.com/" + REPO + "/releases/download/" + release["tag_name"] + "/" + name
     actual, total = hashlib.sha256(), 0
     with request(url, 90) as response, output.open("xb") as dest:
@@ -167,11 +183,11 @@ def fetch_asset(release, name, output, expected=None, limit=128 << 20):
             actual.update(chunk)
         dest.flush()
         os.fsync(dest.fileno())
-    if total != size or actual.hexdigest() != digest[7:]:
+    if total != size or actual.hexdigest() != digest:
         raise Problem("Checksum mismatch: " + name, 502)
 
 
-def stage(release, role):
+def bundle_files(role):
     arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine())
     if not arch:
         raise Problem("Supported Linux architectures are amd64 and arm64")
@@ -179,6 +195,11 @@ def stage(release, role):
     files = {component + "-linux-" + arch: component, "setup.py": "setup.py"}
     if role == "game":
         files["MineCManagerBridge.jar"] = "MineCManagerBridge.jar"
+    return files
+
+
+def stage(release, role):
+    files = bundle_files(role)
     releases = BASE / "releases"
     releases.mkdir(parents=True, mode=0o755, exist_ok=True)
     dest = releases / release["tag_name"]
@@ -242,7 +263,8 @@ def record(**fields):
 def check():
     with locked():
         try:
-            release = latest()
+            cfg = read(ETC / "install.json", {})
+            release = latest(cfg.get("role"))
             target = release["tag_name"] if release else ""
             record(latest=target, checked=now(), check_error="")
         except Exception as err:
@@ -575,7 +597,7 @@ def apply_update():
                 rollback(cfg, state, "Interrupted update")
             return
         try:
-            release = latest()
+            release = latest(cfg["role"])
             target = state["target"]
             if not release or release["tag_name"] != target or version(target) <= version(installed()):
                 raise Problem("Selected release is stale; check releases again")
@@ -650,7 +672,7 @@ def install(role, pair_path=None):
                 if "MCM_AGENT_TOKEN=" + pairing["token"] not in (ETC / "agent.env").read_text().splitlines():
                     raise Problem("Enrollment token differs from the installed node")
             return state
-        release = latest()
+        release = latest(role)
         if not release:
             raise Problem("No published stable GitHub Release is available")
         if not existing:

@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.panel
+    environment:
+      MCM_PANEL_DEPLOYMENT: compose
     restart: unless-stopped
     ports:
       - "127.0.0.1:9080:9080"

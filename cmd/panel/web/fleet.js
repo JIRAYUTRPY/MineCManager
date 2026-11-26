@@ -68,6 +68,9 @@ function clearRelease() {
   ++releaseSequence;
   clearTimeout(updateTimer);
   shownRelease = null;
+  $('composeUpdate').hidden = true;
+  $('managedUpdate').hidden = false;
+  $('releaseInfo').textContent = 'กำลังโหลดสถานะ';
   $('applyRelease').disabled = true;
 }
 function updatePath() {
@@ -83,6 +86,14 @@ async function refreshRelease(data, reportError = false) {
     const s = await api(path, data ? 'POST' : 'GET', data);
     if (seq !== releaseSequence || path !== updatePath()) return;
     shownRelease = s;
+    const compose = !v('updateTarget') && s.update_method === 'compose';
+    $('composeUpdate').hidden = !compose;
+    $('managedUpdate').hidden = compose;
+    if (compose) {
+      $('releaseInfo').textContent = 'Panel นี้อัปเดตผ่าน Docker Compose บน Panel VM';
+      $('applyRelease').disabled = true;
+      return;
+    }
     const labels = {
       installed: 'ติดตั้งแล้ว',
       queued: 'รอดำเนินการ',
@@ -94,7 +105,8 @@ async function refreshRelease(data, reportError = false) {
     const busy = ['queued', 'applying'].includes(s.phase);
     $('releaseInfo').textContent = [
       'ติดตั้ง ' + s.installed,
-      'GitHub Latest ' + (s.latest || (s.check_error ? 'ตรวจไม่สำเร็จ' : 'ยังไม่มี stable release')),
+      'GitHub Latest ' +
+        (s.latest || (s.check_error ? 'ตรวจไม่สำเร็จ' : s.checked ? 'ยังไม่มี stable release' : 'ยังไม่ได้ตรวจ')),
       s.checked ? 'ตรวจเมื่อ ' + new Date(s.checked).toLocaleString('th-TH') : '',
       labels[s.phase] || s.phase,
       s.check_error || s.message

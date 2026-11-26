@@ -12,6 +12,10 @@ spec = importlib.util.spec_from_file_location("installer", Path(__file__).resolv
 installer = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(installer)
 
+spec = importlib.util.spec_from_file_location("publisher", Path(__file__).with_name("publish-release.py"))
+publisher = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(publisher)
+
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
@@ -35,12 +39,74 @@ class ReleaseTests(unittest.TestCase):
 
     def test_published_stable_only(self):
         release, _ = self.fixture("v1.2.3")
-        for change in ({"draft": True}, {"prerelease": True}, {"tag_name": "v1.2.3-beta"},
+        for change in ({"tag_name": "0.01.0"}, {"tag_name": "1.2.3-rc1"}, {"draft": True}, {"prerelease": True}, {"tag_name": "v1.2.3-beta"},
                        {"tag_name": "main"}, {"tag_name": "../v1.2.3"}):
             with self.subTest(change=change), patch.object(installer, "request", return_value=io.BytesIO(json.dumps(release | change).encode())):
                 with self.assertRaises(installer.Problem):
                     installer.latest()
         self.assertGreater(installer.version("v1.10.0"), installer.version("v1.9.9"))
+
+    def test_bare_tag_and_prefixed_tag_have_the_same_version(self):
+        release, files = self.fixture("0.0.2")
+        self.assertEqual(installer.version("v0.0.2"), installer.version("0.0.2"))
+        installer.select("v0.0.1")
+        installer.save(installer.ETC / "install.json", {"role": "panel"})
+
+        def request(url, *_):
+            if url == installer.API:
+                return io.BytesIO(json.dumps(release).encode())
+            self.assertIn("/releases/download/0.0.2/", url)
+            return io.BytesIO(files[url.rsplit("/", 1)[1]])
+
+        with patch.object(installer, "request", side_effect=request), patch.object(installer, "unit"):
+            self.assertTrue(installer.check()["available"])
+            self.assertEqual(installer.queue("0.0.2")["target"], "0.0.2")
+            installer.stage(release, "panel")
+            installer.select("v0.0.2")
+            self.assertFalse(installer.check()["available"])
+        self.assertTrue((installer.BASE / "releases/0.0.2/mcm-panel").is_file())
+
+    def test_source_only_or_partial_release_is_not_offered(self):
+        release, _ = self.fixture("0.0.1")
+        installer.select("v0.0.0")
+        installer.save(installer.ETC / "install.json", {"role": "panel"})
+        for assets, missing in (([], "SHA256SUMS"), ([a for a in release["assets"] if a["name"] != "mcm-panel-linux-amd64"], "mcm-panel-linux-amd64")):
+            installer.record(latest="v0.0.9")
+            metadata = json.dumps(release | {"assets": assets}).encode()
+            with self.subTest(missing=missing), patch.object(installer, "request", return_value=io.BytesIO(metadata)):
+                with self.assertRaisesRegex(installer.Problem, "0.0.1.*" + missing):
+                    installer.check()
+                state = installer.status()
+                self.assertFalse(state["available"])
+                self.assertIn(missing, state["check_error"])
+                with self.assertRaises(installer.Problem):
+                    installer.queue("v0.0.9")
+
+    def test_publish_fills_missing_files_without_replacing_public_assets(self):
+        release, files = self.fixture("0.0.1")
+        directory = installer.BASE
+        for name, data in files.items():
+            (directory / name).write_bytes(data)
+        metadata = {asset["name"]: asset for asset in release["assets"]}
+        release["assets"] = [metadata["setup.py"]]
+        uploaded = []
+
+        def gh(*args):
+            if args[0] == "api":
+                return json.dumps(release)
+            self.assertEqual(args[:3], ("release", "upload", "0.0.1"))
+            name = Path(args[3]).name
+            uploaded.append(name)
+            release["assets"].append(metadata[name])
+
+        with patch.object(publisher, "release_url", return_value="test"), patch.object(publisher, "gh", side_effect=gh):
+            publisher.publish("0.0.1", directory)
+            publisher.publish("0.0.1", directory)
+            self.assertEqual(uploaded, ["mcm-panel-linux-amd64", "SHA256SUMS"])
+            release["assets"] = [dict(metadata["setup.py"], digest="sha256:" + "0" * 64)]
+            with self.assertRaisesRegex(RuntimeError, "Existing asset setup.py differs"):
+                publisher.publish("0.0.1", directory)
+            self.assertEqual(len(uploaded), 2)
 
     def test_checksum_failure_cannot_switch_active_version(self):
         release, files = self.fixture("v1.0.0")
